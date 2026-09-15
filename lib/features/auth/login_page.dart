@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/theme/app_theme.dart';
 import '../../data/repositories/mock_sso_repository.dart';
 import '../../domain/entities/mock_sso_assertion.dart';
 
@@ -66,55 +67,109 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Iniciar sesion')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Form(
-            key: _formKey,
-            child: Column(
-              children: [
-                TextFormField(
-                  controller: _codigoController,
-                  decoration: const InputDecoration(
-                    labelText: 'Codigo institucional',
-                  ),
-                  keyboardType: TextInputType.number,
-                  validator: (value) => (value == null || value.trim().isEmpty)
-                      ? 'Requerido'
-                      : null,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.page,
+            vertical: 32,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: const BoxDecoration(
+                  color: AppColors.ink,
+                  shape: BoxShape.circle,
                 ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _passwordController,
-                  decoration: const InputDecoration(labelText: 'Contrasena'),
-                  obscureText: true,
-                  validator: (value) => (value == null || value.isEmpty)
-                      ? 'Requerido'
-                      : null,
+                child: const Icon(
+                  Icons.how_to_vote_outlined,
+                  color: AppColors.onInk,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text('Bienvenido a Themis', style: textTheme.displayMedium),
+              const SizedBox(height: 8),
+              Text(
+                'Inicia sesion con tu SSO institucional para continuar',
+                style: textTheme.bodySmall,
+              ),
+              const SizedBox(height: 28),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(AppSpacing.card + 4),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      children: [
+                        TextFormField(
+                          controller: _codigoController,
+                          decoration: const InputDecoration(
+                            labelText: 'Codigo institucional',
+                          ),
+                          keyboardType: TextInputType.number,
+                          validator: (value) =>
+                              (value == null || value.trim().isEmpty)
+                              ? 'Requerido'
+                              : null,
+                        ),
+                        const SizedBox(height: AppSpacing.stack),
+                        TextFormField(
+                          controller: _passwordController,
+                          decoration: const InputDecoration(
+                            labelText: 'Contrasena',
+                          ),
+                          obscureText: true,
+                          validator: (value) =>
+                              (value == null || value.isEmpty)
+                              ? 'Requerido'
+                              : null,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: AppSpacing.stack),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(AppSpacing.card),
+                  decoration: BoxDecoration(
+                    color: AppColors.error.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(AppRadius.card),
+                    border: Border.all(
+                      color: AppColors.error.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Text(
+                    _error!,
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: AppColors.error,
+                    ),
+                  ),
                 ),
               ],
-            ),
-          ),
-          if (_error != null) ...[
-            const SizedBox(height: 16),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(_error!),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: _loading
+                    ? const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        child: Center(child: CircularProgressIndicator()),
+                      )
+                    : FilledButton(
+                        onPressed: _submit,
+                        child: const Text('Ingresar'),
+                      ),
               ),
-            ),
-          ],
-          const SizedBox(height: 16),
-          if (_loading)
-            const Center(child: CircularProgressIndicator())
-          else
-            FilledButton(
-              onPressed: _submit,
-              child: const Text('Ingresar'),
-            ),
-        ],
+            ],
+          ),
+        ),
       ),
     );
   }

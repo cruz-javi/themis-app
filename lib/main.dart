@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'core/config/env.dart';
 import 'core/network/api_client.dart';
 import 'core/router/app_router.dart';
+import 'core/theme/app_theme.dart';
 import 'data/repositories/demo_repository.dart';
 import 'data/repositories/mock_sso_repository.dart';
 
@@ -34,10 +35,7 @@ class ThemisApp extends StatelessWidget {
     return MaterialApp.router(
       title: 'Themis',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0F172A)),
-        useMaterial3: true,
-      ),
+      theme: buildAppTheme(),
       routerConfig: buildRouter(repository, mockSsoRepository),
     );
   }
