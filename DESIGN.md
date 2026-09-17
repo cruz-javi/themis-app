@@ -2,20 +2,20 @@
 
 Guía de estilo para la app móvil del votante, inspirada en la referencia visual compartida (app de running estilo "RunMate": tarjetas blancas flotantes sobre fondo gris claro, acento menta/verde agua, nav inferior en píldora negra, chips/badges negros redondeados). El objetivo es que **toda pantalla nueva** siga este mismo lenguaje visual en vez de inventar un estilo por feature.
 
-> Los valores de color son un punto de partida fiel a la referencia (estimados visualmente, no un extractor de pixeles exacto). Ajustar en `main.dart`/`ThemeData` si al implementar se ve necesario, pero mantener la relación entre ellos (fondo gris muy claro, tarjetas blancas, un solo acento de color, negro para elementos de navegación/énfasis).
+> Los valores de color base (`ink`, `background`/paper, `accent`) son los oficiales de la identidad de marca Themis (logo + guía de marca). El resto de tokens derivados (`accent-strong`, `ink-soft`, `border-subtle`, `error`) siguen siendo estimaciones a partir de la referencia visual "RunMate" — ajustar en `main.dart`/`ThemeData` si al implementar se ve necesario, pero mantener la relación entre ellos (fondo muy claro tipo "paper", tarjetas blancas, un solo acento de color, `ink` para elementos de navegación/énfasis).
 
 ## 1. Paleta de color
 
-| Token | Hex aprox. | Uso |
+| Token | Hex | Uso |
 |---|---|---|
-| `background` | `#F1F1EE` | Fondo de toda pantalla (gris cálido muy claro, nunca blanco puro) |
+| `background` (paper) | `#F8FAFC` | Fondo de toda pantalla (color oficial de marca "paper", nunca blanco puro) |
 | `surface` (tarjetas) | `#FFFFFF` | Cards, hojas modales, campos de formulario |
-| `accent` (menta) | `#8FD9C4` | Barras de progreso, gráficos, anillos, highlights puntuales — **un solo acento**, no mezclar con otros colores de marca |
-| `accent-strong` | `#4FAE93` | Variante más saturada del acento para texto/iconos sobre fondo claro que necesiten más contraste que el mint plano |
-| `ink` (negro/casi negro) | `#181818` | Nav inferior, chips de stats, texto principal, botones primarios |
-| `ink-soft` | `#4A4A4A` | Texto secundario sobre fondo claro |
+| `accent` | `#12B39B` | Color oficial de marca. Barras de progreso, gráficos, anillos, highlights puntuales — **un solo acento**, no mezclar con otros colores de marca |
+| `accent-strong` | `#0E8F7C` | Variante más saturada del acento (estimada, ~15% más oscura) para texto/iconos sobre fondo claro que necesiten más contraste que el acento plano |
+| `ink` | `#0F172A` | Color oficial de marca. Nav inferior, chips de stats, texto principal, botones primarios |
+| `ink-soft` | `#4A5568` | Texto secundario sobre fondo claro (estimado, variante suavizada de `ink`) |
 | `on-ink` | `#FFFFFF` | Texto/iconos sobre fondo `ink` |
-| `border-subtle` | `#E7E7E3` | Bordes muy sutiles entre tarjetas cuando no alcanza con la sombra |
+| `border-subtle` | `#E2E8F0` | Bordes muy sutiles entre tarjetas cuando no alcanza con la sombra (estimado, variante de `paper`) |
 | `success` / `habilitado` | reusar `accent-strong` | Ya usado hoy en `login_result_page.dart` como verde de "habilitado" — no introducir un verde distinto |
 | `error` | `#D64545` | Mensajes de error (login fallido, sin conexión) |
 
@@ -79,10 +79,10 @@ Esto genera una paleta Material 3 automática a partir de un solo seed, que **no
 ```dart
 theme: ThemeData(
   useMaterial3: true,
-  scaffoldBackgroundColor: const Color(0xFFF1F1EE),
+  scaffoldBackgroundColor: const Color(0xFFF8FAFC),
   colorScheme: const ColorScheme.light(
-    primary: Color(0xFF181818),
-    secondary: Color(0xFF8FD9C4),
+    primary: Color(0xFF0F172A),
+    secondary: Color(0xFF12B39B),
     surface: Color(0xFFFFFFFF),
     error: Color(0xFFD64545),
   ),
@@ -102,6 +102,6 @@ Pantallas ya existentes a re-visitar cuando se adopte esta guía: `lib/features/
 ## 6. Qué NO hacer
 
 - No usar los colores/`Card`/botones default de Material 3 sin sobreescribir `shape`/`elevation` — se nota inmediatamente que no sigue la guía.
-- No introducir un segundo color de acento por pantalla "porque queda lindo" — un solo mint en toda la app.
+- No introducir un segundo color de acento por pantalla "porque queda lindo" — un solo `accent` (teal de marca) en toda la app.
 - No usar esquinas rectas en tarjetas ni sombras duras con color.
 - No usar la fuente default del sistema si se puede agregar `google_fonts` — la tipografía redondeada es parte central del estilo.

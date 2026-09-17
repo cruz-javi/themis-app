@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Solo aplica a builds debug (android/app/src/debug/, no src/main/): permite
+  trafico HTTP sin cifrar hacia themis-core corriendo en la red local durante
+  desarrollo. El APK de release no incluye este archivo, asi que no baja la
+  seguridad del build final.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

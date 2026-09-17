@@ -38,6 +38,29 @@ lib/domain/usecases/  Casos de uso
 lib/features/          Una carpeta por feature; lib/features/demo/ es andamiaje temporal, borrar al empezar features reales
 ```
 
+## CU-05 (registro): generación de identidad, cegado y presentación anónima
+
+Implementado de punta a punta contra el backend real. `lib/core/crypto/crypto_bridge.dart` corre
+`@semaphore-protocol/identity` + `@cloudflare/blindrsa-ts` (RFC 9474) dentro de un WebView local
+sin red (`assets/semaphore/`, bundle generado desde `tool/semaphore-identity-bundle/` — no
+reimplementado en Dart, ver justificación en `docs/modelo-bd-registro.md`). `RegistrationPage`
+llega hasta "Credencial certificada lista" mostrando la analogía del "sobre carbón"
+(`lib/features/registration/widgets/registration_steps.dart`).
+
+**Segundo paso, separado en el tiempo — limitación documentada, no resuelta del todo:** después de
+certificar la credencial, la app programa un delay aleatorio
+(`lib/core/config/credential_presentation_config.dart`) y la presenta de forma anónima
+(`POST /elections/:id/credentials/present`, sin ninguna sesión ni dato que la conecte con el
+registro original) recién cuando pasa ese tiempo. El chequeo es **oportunista**
+(`lib/core/scheduling/credential_presentation_checker.dart`, invocado al abrir la app y al volver a
+primer plano vía `WidgetsBindingObserver` en `main.dart`), **no un job en background real** — si el
+votante no vuelve a abrir la app después del delay, la credencial queda sin presentar hasta que la
+abra. No se agregó `WorkManager`/`BGTaskScheduler` a propósito (dependencias nuevas, configuración
+por plataforma) para esta iteración. El delay en sí es una mitigación parcial de correlación por
+timing (IP/momento del request), no una garantía criptográfica — el reemplazo real es el Relayer
+que se construya para CU-10, pendiente. Detalle completo del protocolo en
+`themis-core/src/modules/registration/README.md`.
+
 ## Auth — todavía sin implementar
 
 `ApiClient` (`lib/core/network/api_client.dart`) es un wrapper de Dio genérico sin ningún interceptor de auth todavía. El login de plataforma de themis-core (`/auth/login`) usa **cookies httpOnly**, lo cual no es el patrón natural para un cliente móvil nativo (requeriría `cookie_jar`/`dio_cookie_manager` y persistencia manual) — pero ese login es para Admin/Autoridad/Auditor, probablemente **no** para el flujo del votante en esta app. El flujo del votante pasa por `/mock-sso/login` (sin cookies, devuelve una assertion de elegibilidad) seguido de la generación local de identidad Semaphore. Antes de escribir el cliente de auth de esta app, confirmar contra `themis-core/src/modules/mock-sso/README.md` el contrato exacto de esa respuesta.

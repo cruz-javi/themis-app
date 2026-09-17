@@ -15,6 +15,7 @@ dependencies:
   go_router: ^14.6.2
   flutter_secure_storage: ^9.2.2
   google_fonts: ^6.2.1
+  webview_flutter: ^4.10.0
 
 dev_dependencies:
   flutter_test:
@@ -25,3 +26,5 @@ flutter:
   uses-material-design: true
   assets:
     - assets/.env
+    - assets/semaphore/identity.html
+    - assets/semaphore/identity.bundle.js

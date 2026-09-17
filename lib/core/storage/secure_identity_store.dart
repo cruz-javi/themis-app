@@ -5,6 +5,11 @@ class SecureIdentityStore {
       : _storage = storage ?? const FlutterSecureStorage();
 
   static const _identityKey = 'themis.identity.secret';
+  static const _credentialPreparedMessageKey = 'themis.credential.prepared_message';
+  static const _credentialSignatureKey = 'themis.credential.signature';
+  static const _presentationElectionIdKey = 'themis.presentation.election_id';
+  static const _presentationPresentAtKey = 'themis.presentation.present_at';
+  static const _presentationDoneKey = 'themis.presentation.done';
 
   final FlutterSecureStorage _storage;
 
@@ -13,5 +18,59 @@ class SecureIdentityStore {
   Future<void> write(String secret) =>
       _storage.write(key: _identityKey, value: secret);
 
-  Future<void> clear() => _storage.delete(key: _identityKey);
+  /// La "credencial certificada" (ver diagrama de secuencia): el mensaje
+  /// preparado que realmente se firmo, mas la firma ya descegada. Ambos
+  /// hacen falta juntos para usar la credencial mas adelante.
+  Future<void> writeCredential({
+    required String preparedMessage,
+    required String signature,
+  }) async {
+    await _storage.write(key: _credentialPreparedMessageKey, value: preparedMessage);
+    await _storage.write(key: _credentialSignatureKey, value: signature);
+  }
+
+  Future<({String preparedMessage, String signature})?> readCredential() async {
+    final preparedMessage = await _storage.read(key: _credentialPreparedMessageKey);
+    final signature = await _storage.read(key: _credentialSignatureKey);
+    if (preparedMessage == null || signature == null) return null;
+    return (preparedMessage: preparedMessage, signature: signature);
+  }
+
+  /// Programa la presentacion anonima de la credencial (segundo paso de
+  /// CU-05, ver registration/README.md en themis-core): se llama recien
+  /// despues de [presentAt], para no delatar el registro por timing.
+  Future<void> writePresentationSchedule({
+    required String electionId,
+    required DateTime presentAt,
+  }) async {
+    await _storage.write(key: _presentationElectionIdKey, value: electionId);
+    await _storage.write(
+      key: _presentationPresentAtKey,
+      value: presentAt.toUtc().toIso8601String(),
+    );
+    await _storage.delete(key: _presentationDoneKey);
+  }
+
+  Future<({String electionId, DateTime presentAt})?> readPresentationSchedule() async {
+    final electionId = await _storage.read(key: _presentationElectionIdKey);
+    final presentAtRaw = await _storage.read(key: _presentationPresentAtKey);
+    if (electionId == null || presentAtRaw == null) return null;
+    return (electionId: electionId, presentAt: DateTime.parse(presentAtRaw));
+  }
+
+  Future<bool> isPresentationDone() async {
+    return (await _storage.read(key: _presentationDoneKey)) == 'true';
+  }
+
+  Future<void> markPresentationDone() =>
+      _storage.write(key: _presentationDoneKey, value: 'true');
+
+  Future<void> clear() async {
+    await _storage.delete(key: _identityKey);
+    await _storage.delete(key: _credentialPreparedMessageKey);
+    await _storage.delete(key: _credentialSignatureKey);
+    await _storage.delete(key: _presentationElectionIdKey);
+    await _storage.delete(key: _presentationPresentAtKey);
+    await _storage.delete(key: _presentationDoneKey);
+  }
 }

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../data/repositories/mock_sso_repository.dart';
+import '../../domain/entities/login_result.dart';
 import '../../domain/entities/mock_sso_assertion.dart';
 
 class LoginPage extends StatefulWidget {
@@ -47,7 +48,10 @@ class _LoginPageState extends State<LoginPage> {
 
       if (!mounted) return;
       setState(() => _loading = false);
-      context.push('/login/resultado', extra: payload);
+      context.push(
+        '/login/resultado',
+        extra: LoginResult(assertion: assertion, payload: payload),
+      );
     } on DioException catch (error) {
       if (!mounted) return;
       setState(() {

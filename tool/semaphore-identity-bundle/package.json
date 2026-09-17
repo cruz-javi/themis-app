@@ -1,0 +1,16 @@
+{
+  "name": "semaphore-identity-bundle",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Genera assets/semaphore/identity.bundle.js: @semaphore-protocol/identity (generacion de identidad) + @cloudflare/blindrsa-ts (cegado RSA RFC 9474, CU-05) empaquetados para correr offline dentro de un WebView de themis-app. Se regenera manualmente (npm install && npm run build) solo cuando cambia la version de alguna libreria; el output se commitea como asset.",
+  "scripts": {
+    "build": "esbuild src/identity-entry.js --bundle --minify --format=iife --global-name=ThemisIdentity --outfile=../../assets/semaphore/identity.bundle.js"
+  },
+  "dependencies": {
+    "@cloudflare/blindrsa-ts": "^0.4.6",
+    "@semaphore-protocol/identity": "^4.11.1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.0"
+  }
+}

@@ -13,6 +13,8 @@ assets/.env
 .env
 .env.local
 
+tool/semaphore-identity-bundle/node_modules/
+
 *.iml
 *.ipr
 *.iws

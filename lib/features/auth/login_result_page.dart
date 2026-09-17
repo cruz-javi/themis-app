@@ -1,15 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_theme.dart';
-import '../../domain/entities/mock_sso_assertion.dart';
+import '../../domain/entities/login_result.dart';
+import '../../domain/entities/registration_route_args.dart';
+
+// Todavia no existe una pantalla de seleccion de eleccion (CU no cubierto
+// en esta iteracion) - se usa el id de una eleccion demo sembrada a mano en
+// la BD local (REGISTRO_ABIERTO) hasta que exista esa pantalla.
+const _placeholderElectionId = 'dc03c565-85c8-452e-88a9-57a231ddff10';
 
 class LoginResultPage extends StatelessWidget {
-  const LoginResultPage({super.key, required this.payload});
+  const LoginResultPage({super.key, required this.result});
 
-  final MockSsoAssertionPayload payload;
+  final LoginResult result;
 
   @override
   Widget build(BuildContext context) {
+    final payload = result.payload;
     final textTheme = Theme.of(context).textTheme;
     final statusColor = payload.habilitado
         ? AppColors.accentStrong
@@ -71,6 +79,22 @@ class LoginResultPage extends StatelessWidget {
                   ),
                 ),
               ),
+              if (payload.habilitado) ...[
+                const SizedBox(height: AppSpacing.stack),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton(
+                    onPressed: () => context.push(
+                      '/registro',
+                      extra: RegistrationRouteArgs(
+                        electionId: _placeholderElectionId,
+                        assertion: result.assertion,
+                      ),
+                    ),
+                    child: const Text('Continuar al registro'),
+                  ),
+                ),
+              ],
             ],
           ),
         ),

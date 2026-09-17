@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:themis_app/data/repositories/mock_sso_repository.dart';
-import 'package:themis_app/domain/entities/mock_sso_assertion.dart';
+import 'package:themis_app/domain/entities/login_result.dart';
 import 'package:themis_app/features/auth/login_page.dart';
 import 'package:themis_app/features/auth/login_result_page.dart';
 
@@ -48,7 +48,7 @@ Widget _wrap(MockSsoRepository repository) {
       GoRoute(
         path: '/login/resultado',
         builder: (context, state) => LoginResultPage(
-          payload: state.extra as MockSsoAssertionPayload,
+          result: state.extra as LoginResult,
         ),
       ),
     ],
