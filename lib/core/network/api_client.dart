@@ -21,6 +21,11 @@ class ApiClient {
     return response.data ?? <String, dynamic>{};
   }
 
+  Future<List<dynamic>> getJsonList(String path) async {
+    final response = await _dio.get<List<dynamic>>(path);
+    return response.data ?? <dynamic>[];
+  }
+
   Future<Map<String, dynamic>> postJson(
     String path, {
     Map<String, dynamic>? body,

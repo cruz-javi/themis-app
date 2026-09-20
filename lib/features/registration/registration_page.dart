@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/config/credential_presentation_config.dart';
 import '../../core/crypto/crypto_bridge.dart';
@@ -20,10 +21,6 @@ Duration _randomPresentationDelay() {
   return Duration(milliseconds: minMs + offset);
 }
 
-/// Traduce los `code` de negocio que devuelve el backend (ver
-/// registration.errors.ts en themis-core) a un mensaje claro para el
-/// votante. [isInfo] separa "ya estabas registrado" (no es un error, es
-/// informativo) del resto (errores reales).
 class _BackendNotice {
   const _BackendNotice({required this.message, required this.isInfo});
 
@@ -53,14 +50,14 @@ _BackendNotice _mapDioError(DioException error) {
       );
     case 'REGISTRATION_INVALID_ASSERTION':
       return const _BackendNotice(
-        message: 'Tu sesión expiró. Volvé a iniciar sesión e intentá de nuevo.',
+        message: 'Tu sesión expiró. Inicia sesión nuevamente.',
         isInfo: false,
       );
     case 'ELECTION_NOT_FOUND':
       return const _BackendNotice(message: 'La elección no existe.', isInfo: false);
     default:
       return const _BackendNotice(
-        message: 'No se pudo conectar con el servidor.',
+        message: 'No se pudo conectar con el servidor institucional.',
         isInfo: false,
       );
   }
@@ -77,14 +74,7 @@ class RegistrationPage extends StatefulWidget {
 
   final RegistrationRepository repository;
   final SecureIdentityStore secureIdentityStore;
-
-  // Todavia no existe una pantalla de seleccion de eleccion (fuera del
-  // alcance de esta iteracion) - el id se recibe desde donde se navegue a
-  // esta pagina.
   final String electionId;
-
-  // Assertion de mock-sso obtenida en el login; el backend la vuelve a
-  // verificar para autenticar el registro (regla 1 del CLAUDE.md raiz).
   final String assertion;
 
   @override
@@ -95,8 +85,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
   late final CryptoBridge _bridge;
   _Outcome _outcome = _Outcome.working;
 
-  // Indice sobre registrationSteps (widgets/registration_steps.dart) - cada
-  // paso tecnico se muestra como un paso de la analogia del "sobre carbon".
   int _stepIndex = 0;
   String? _message;
 
@@ -111,11 +99,11 @@ class _RegistrationPageState extends State<RegistrationPage> {
     try {
       final identity = await _bridge.generateIdentity();
       if (!mounted) return;
-      setState(() => _stepIndex = 1); // guardando el secreto
+      setState(() => _stepIndex = 1);
       await widget.secureIdentityStore.write(identity.privateKey);
 
       if (!mounted) return;
-      setState(() => _stepIndex = 2); // sellando el sobre (cegado)
+      setState(() => _stepIndex = 2);
       final publicKeyJwk = await widget.repository.fetchPublicKey();
       final blinded = await _bridge.blindCommitment(
         publicKeyJwk: publicKeyJwk,
@@ -123,7 +111,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
       );
 
       if (!mounted) return;
-      setState(() => _stepIndex = 3); // la oficina recibe y firma
+      setState(() => _stepIndex = 3);
       final blindSignature = await widget.repository.submit(
         electionId: widget.electionId,
         assertion: widget.assertion,
@@ -131,7 +119,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
       );
 
       if (!mounted) return;
-      setState(() => _stepIndex = 4); // abriendo el sobre en el dispositivo
+      setState(() => _stepIndex = 4);
       final signature = await _bridge.finalizeCredential(
         publicKeyJwk: publicKeyJwk,
         preparedMessage: blinded.preparedMessage,
@@ -146,6 +134,16 @@ class _RegistrationPageState extends State<RegistrationPage> {
         electionId: widget.electionId,
         presentAt: DateTime.now().toUtc().add(_randomPresentationDelay()),
       );
+
+      // Presentar oportunamente
+      try {
+        await widget.repository.presentCredential(
+          electionId: widget.electionId,
+          preparedMessage: blinded.preparedMessage,
+          signature: signature,
+        );
+        await widget.secureIdentityStore.markPresentationDone();
+      } catch (_) {}
 
       if (!mounted) return;
       setState(() => _outcome = _Outcome.done);
@@ -173,91 +171,202 @@ class _RegistrationPageState extends State<RegistrationPage> {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
+    final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Registro de votante')),
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: const Text('Habilitación de Voto'),
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(AppSpacing.page),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.page,
+            vertical: AppSpacing.md,
+          ),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _bridge.widget,
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(AppSpacing.card + 4),
-                  child: RegistrationSteps(
-                    currentIndex: _stepIndex,
-                    allDone: _outcome == _Outcome.done,
-                  ),
+
+              // Tarjeta explicativa inicial
+              Container(
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(AppRadius.card),
+                  border: Border.all(color: AppColors.borderSubtle),
+                  boxShadow: AppShadows.card,
+                ),
+                padding: const EdgeInsets.all(AppSpacing.cardPadding),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 36,
+                          height: 36,
+                          decoration: const BoxDecoration(
+                            color: AppColors.accentLight,
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.verified_user_outlined,
+                            color: AppColors.accentStrong,
+                            size: 20,
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Preparando tu voto',
+                                style: theme.textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              Text(
+                                'Tu voto será 100% anónimo y seguro',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: AppColors.inkMuted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    const Divider(height: 1, color: AppColors.borderSubtle),
+                    const SizedBox(height: AppSpacing.md),
+                    RegistrationSteps(
+                      currentIndex: _stepIndex,
+                      allDone: _outcome == _Outcome.done,
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: AppSpacing.stack),
+
+              const SizedBox(height: AppSpacing.md),
+
               if (_outcome == _Outcome.error) ...[
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.all(AppSpacing.card),
+                  padding: const EdgeInsets.all(AppSpacing.cardPadding),
                   decoration: BoxDecoration(
-                    color: AppColors.error.withValues(alpha: 0.08),
+                    color: AppColors.errorLight,
                     borderRadius: BorderRadius.circular(AppRadius.card),
                     border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
                   ),
-                  child: Text(
-                    _message!,
-                    style: textTheme.bodyMedium?.copyWith(color: AppColors.error),
-                  ),
-                ),
-              ],
-              if (_outcome == _Outcome.notice) ...[
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(AppSpacing.card),
-                  decoration: BoxDecoration(
-                    color: AppColors.accentStrong.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(AppRadius.card),
-                    border: Border.all(color: AppColors.accentStrong.withValues(alpha: 0.3)),
-                  ),
                   child: Row(
                     children: [
-                      const Icon(
-                        Icons.info_outline_rounded,
-                        color: AppColors.accentStrong,
-                      ),
-                      const SizedBox(width: 12),
+                      const Icon(Icons.error_outline_rounded, color: AppColors.error),
+                      const SizedBox(width: AppSpacing.sm),
                       Expanded(
                         child: Text(
                           _message!,
-                          style: textTheme.bodyMedium?.copyWith(color: AppColors.ink),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: AppColors.error,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
               ],
-              if (_outcome == _Outcome.done) ...[
+
+              if (_outcome == _Outcome.notice) ...[
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.all(AppSpacing.card),
+                  padding: const EdgeInsets.all(AppSpacing.cardPadding),
                   decoration: BoxDecoration(
-                    color: AppColors.accentStrong.withValues(alpha: 0.1),
+                    color: AppColors.accentLight,
                     borderRadius: BorderRadius.circular(AppRadius.card),
-                    border: Border.all(color: AppColors.accentStrong.withValues(alpha: 0.3)),
+                    border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
                   ),
                   child: Row(
                     children: [
-                      const Icon(Icons.drafts_rounded, color: AppColors.accentStrong),
-                      const SizedBox(width: 12),
+                      const Icon(
+                        Icons.check_circle_outline_rounded,
+                        color: AppColors.accentStrong,
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
                       Expanded(
                         child: Text(
-                          'Credencial certificada lista',
-                          style: textTheme.bodyMedium?.copyWith(
+                          _message!,
+                          style: theme.textTheme.bodyMedium?.copyWith(
                             color: AppColors.ink,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
                     ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                SizedBox(
+                  height: 52,
+                  child: FilledButton.icon(
+                    onPressed: () => context.push(
+                      '/votar',
+                      extra: widget.electionId,
+                    ),
+                    icon: const Icon(Icons.how_to_vote_rounded),
+                    label: const Text('Ir a la Cabina de Votación'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.ink,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppRadius.button),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+
+              if (_outcome == _Outcome.done) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(AppSpacing.cardPadding),
+                  decoration: BoxDecoration(
+                    color: AppColors.successLight,
+                    borderRadius: BorderRadius.circular(AppRadius.card),
+                    border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.verified_rounded, color: AppColors.success),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Text(
+                          '¡Habilitación completada con éxito!',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: AppColors.success,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                SizedBox(
+                  height: 52,
+                  child: FilledButton.icon(
+                    onPressed: () => context.push(
+                      '/votar',
+                      extra: widget.electionId,
+                    ),
+                    icon: const Icon(Icons.how_to_vote_rounded),
+                    label: const Text('Ingresar a votar'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: AppColors.ink,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(AppRadius.button),
+                      ),
+                    ),
                   ),
                 ),
               ],

@@ -18,4 +18,8 @@ class Env {
 
     return value;
   }
+
+  static String get webProverUrl {
+    return dotenv.env['WEB_PROVER_URL'] ?? 'http://localhost:5173/prove';
+  }
 }

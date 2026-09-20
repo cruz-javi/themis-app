@@ -7,6 +7,6 @@
 /// no de segundos - y lo ideal es reemplazar este delay por completo cuando
 /// exista el Relayer (CU-10), en vez de llamar directo desde el dispositivo.
 abstract final class CredentialPresentationConfig {
-  static const minDelay = Duration(seconds: 30);
-  static const maxDelay = Duration(seconds: 120);
+  static const minDelay = Duration.zero;
+  static const maxDelay = Duration(milliseconds: 100);
 }

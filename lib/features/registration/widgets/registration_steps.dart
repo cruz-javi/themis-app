@@ -16,52 +16,48 @@ class RegistrationStepInfo {
   final String subtitle;
 }
 
-/// Analogia del "sobre carbon" (docs/diseno-consolidado.md, seccion 2) llevada
-/// a la UI: cada paso tecnico del registro (cegado RSA, firma ciega, etc.) se
-/// explica en terminos de un sobre que se sella, se firma sin abrirlo, y se
-/// abre en casa - sin jerga criptografica para el votante.
+/// Pasos claros, sencillos y humanos para el votante común.
 const List<RegistrationStepInfo> registrationSteps = [
   RegistrationStepInfo(
-    icon: Icons.badge_outlined,
-    title: 'Creamos tu identidad secreta',
-    subtitle: 'Un papelito lacrado que solo vos podes abrir.',
+    icon: Icons.shield_outlined,
+    title: 'Protegiendo tu privacidad',
+    subtitle: 'Generando tu clave secreta personal de votación.',
   ),
   RegistrationStepInfo(
     icon: Icons.lock_outline,
-    title: 'La guardamos en tu dispositivo',
-    subtitle: 'Nunca sale de tu celular.',
+    title: 'Guardando en tu teléfono',
+    subtitle: 'Tu clave se almacena de forma segura y nunca sale de tu dispositivo.',
   ),
   RegistrationStepInfo(
-    icon: Icons.markunread_mailbox_outlined,
-    title: 'La sellamos en un sobre carbon',
-    subtitle: 'Nadie puede ver que hay adentro, ni la oficina de registro.',
+    icon: Icons.badge_outlined,
+    title: 'Verificando con el padrón',
+    subtitle: 'Comprobando tu registro oficial de estudiante en la FICCT.',
   ),
   RegistrationStepInfo(
     icon: Icons.verified_outlined,
-    title: 'La oficina de registro firma el sobre',
-    subtitle: 'Confirma que estas habilitado, sin abrirlo ni ver tu papelito.',
+    title: 'Certificando tu habilitación',
+    subtitle: 'Recibiendo la autorización oficial para poder participar.',
   ),
   RegistrationStepInfo(
-    icon: Icons.drafts_outlined,
-    title: 'Abris el sobre en tu dispositivo',
-    subtitle: 'Ahora tenes un papelito certificado.',
+    icon: Icons.how_to_vote_outlined,
+    title: '¡Listo para votar!',
+    subtitle: 'Ya puedes ingresar a la cabina y emitir tu voto.',
   ),
 ];
 
 class RegistrationSteps extends StatelessWidget {
-  const RegistrationSteps({super.key, required this.currentIndex, required this.allDone});
+  const RegistrationSteps({
+    super.key,
+    required this.currentIndex,
+    required this.allDone,
+  });
 
-  /// Indice del paso en curso (0-based). Los anteriores se muestran como
-  /// completados; los siguientes, como pendientes.
   final int currentIndex;
-
-  /// true cuando ya se completo el ultimo paso (muestra todo en verde, sin
-  /// spinner).
   final bool allDone;
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
+    final theme = Theme.of(context);
 
     return Column(
       children: [
@@ -71,10 +67,10 @@ class RegistrationSteps extends StatelessWidget {
             state: allDone || i < currentIndex
                 ? StepState.done
                 : i == currentIndex
-                ? StepState.active
-                : StepState.pending,
+                    ? StepState.active
+                    : StepState.pending,
             isLast: i == registrationSteps.length - 1,
-            textTheme: textTheme,
+            textTheme: theme.textTheme,
           ),
       ],
     );
@@ -97,12 +93,12 @@ class _StepRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final circleColor = switch (state) {
-      StepState.done => AppColors.accentStrong,
+      StepState.done => AppColors.success,
       StepState.active => AppColors.ink,
-      StepState.pending => AppColors.borderSubtle,
+      StepState.pending => AppColors.surfaceVariant,
     };
-    final iconColor = state == StepState.pending ? AppColors.inkSoft : AppColors.onInk;
-    final titleColor = state == StepState.pending ? AppColors.inkSoft : AppColors.ink;
+    final iconColor = state == StepState.pending ? AppColors.inkMuted : AppColors.onInk;
+    final titleColor = state == StepState.pending ? AppColors.inkMuted : AppColors.ink;
 
     return IntrinsicHeight(
       child: Row(
@@ -111,22 +107,22 @@ class _StepRow extends StatelessWidget {
           Column(
             children: [
               Container(
-                width: 36,
-                height: 36,
+                width: 32,
+                height: 32,
                 decoration: BoxDecoration(color: circleColor, shape: BoxShape.circle),
                 child: Center(
                   child: state == StepState.active
-                      ? SizedBox(
-                          width: 16,
-                          height: 16,
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            color: iconColor,
+                            color: Colors.white,
                           ),
                         )
                       : Icon(
                           state == StepState.done ? Icons.check_rounded : info.icon,
-                          size: 18,
+                          size: 16,
                           color: iconColor,
                         ),
                 ),
@@ -137,16 +133,16 @@ class _StepRow extends StatelessWidget {
                     width: 2,
                     margin: const EdgeInsets.symmetric(vertical: 4),
                     color: state == StepState.done
-                        ? AppColors.accentStrong
+                        ? AppColors.success
                         : AppColors.borderSubtle,
                   ),
                 ),
             ],
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Padding(
-              padding: EdgeInsets.only(bottom: isLast ? 0 : 20),
+              padding: EdgeInsets.only(bottom: isLast ? 0 : AppSpacing.md),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -160,7 +156,10 @@ class _StepRow extends StatelessWidget {
                   const SizedBox(height: 2),
                   Text(
                     info.subtitle,
-                    style: textTheme.bodySmall?.copyWith(color: AppColors.inkSoft),
+                    style: textTheme.bodySmall?.copyWith(
+                      color: AppColors.inkSoft,
+                      height: 1.3,
+                    ),
                   ),
                 ],
               ),

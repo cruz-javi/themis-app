@@ -1,141 +1,634 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/storage/secure_identity_store.dart';
 import '../../core/theme/app_theme.dart';
+import '../../data/repositories/voting_repository.dart';
+import '../../domain/entities/ballot_election.dart';
 import '../../domain/entities/login_result.dart';
 import '../../domain/entities/registration_route_args.dart';
 
-// Todavia no existe una pantalla de seleccion de eleccion (CU no cubierto
-// en esta iteracion) - se usa el id de una eleccion demo sembrada a mano en
-// la BD local (REGISTRO_ABIERTO) hasta que exista esa pantalla.
-const _placeholderElectionId = 'dc03c565-85c8-452e-88a9-57a231ddff10';
-
-class LoginResultPage extends StatelessWidget {
-  const LoginResultPage({super.key, required this.result});
+class LoginResultPage extends StatefulWidget {
+  const LoginResultPage({
+    super.key,
+    required this.result,
+    this.votingRepository,
+    this.secureIdentityStore,
+  });
 
   final LoginResult result;
+  final VotingRepository? votingRepository;
+  final SecureIdentityStore? secureIdentityStore;
+
+  @override
+  State<LoginResultPage> createState() => _LoginResultPageState();
+}
+
+class _LoginResultPageState extends State<LoginResultPage> {
+  bool _loadingElections = false;
+  bool _isVoteEnabledLocally = false;
+  List<BallotElection> _activeElections = [];
+  BallotElection? _selectedElection;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchActiveElections();
+    _checkLocalIdentity();
+  }
+
+  Future<void> _checkLocalIdentity() async {
+    if (widget.secureIdentityStore == null) return;
+    try {
+      final identity = await widget.secureIdentityStore!.read();
+      if (!mounted) return;
+      setState(() {
+        _isVoteEnabledLocally = identity != null && identity.isNotEmpty;
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _fetchActiveElections() async {
+    if (widget.votingRepository == null) return;
+    setState(() => _loadingElections = true);
+    try {
+      final list = await widget.votingRepository!.fetchActiveElections();
+      await _checkLocalIdentity();
+      if (!mounted) return;
+      setState(() {
+        _activeElections = list;
+        if (list.isNotEmpty) {
+          _selectedElection = list.first;
+        } else {
+          _selectedElection = null;
+        }
+        _loadingElections = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loadingElections = false);
+    }
+  }
+
+  String? get _currentElectionId => _selectedElection?.id;
+
+  void _confirmLogout() {
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadius.card),
+        ),
+        title: const Text(
+          'Cerrar Sesión',
+          style: TextStyle(
+            fontWeight: FontWeight.w700,
+            fontSize: 18,
+            color: AppColors.ink,
+          ),
+        ),
+        content: const Text(
+          '¿Deseas salir del sistema de votación?',
+          style: TextStyle(fontSize: 14, color: AppColors.inkSoft),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancelar', style: TextStyle(color: AppColors.inkSoft)),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(ctx).pop();
+              context.go('/login');
+            },
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.error,
+              minimumSize: const Size(100, 44),
+            ),
+            child: const Text('Salir'),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final payload = result.payload;
-    final textTheme = Theme.of(context).textTheme;
-    final statusColor = payload.habilitado
-        ? AppColors.accentStrong
-        : AppColors.error;
+    final payload = widget.result.payload;
+    final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Sesion iniciada')),
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        title: const Text('Panel de Votación'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout_rounded, color: AppColors.inkSoft),
+            tooltip: 'Cerrar Sesión',
+            onPressed: _confirmLogout,
+          ),
+        ],
+      ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.page),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(AppSpacing.card + 4),
-                  child: Column(
+        child: RefreshIndicator(
+          color: AppColors.accentStrong,
+          onRefresh: _fetchActiveElections,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.page,
+              vertical: AppSpacing.md,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // 1. Tarjeta de Credencial Digital del Votante
+                _buildDigitalCredentialCard(payload, theme),
+
+                const SizedBox(height: AppSpacing.lg),
+
+                // 2. Sección de Elecciones Universitarias
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Elección Universitaria',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (_loadingElections)
+                      const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppColors.accentStrong,
+                        ),
+                      )
+                    else
+                      IconButton(
+                        icon: const Icon(Icons.refresh_rounded, size: 20),
+                        color: AppColors.inkSoft,
+                        tooltip: 'Actualizar elecciones',
+                        onPressed: _fetchActiveElections,
+                        constraints: const BoxConstraints(),
+                        padding: EdgeInsets.zero,
+                      ),
+                  ],
+                ),
+
+                const SizedBox(height: AppSpacing.sm),
+
+                _buildElectionsSection(theme, payload.habilitado),
+
+                const SizedBox(height: AppSpacing.lg),
+
+                // 3. Nota amigable sobre el secreto y anonimato del voto
+                Container(
+                  padding: const EdgeInsets.all(AppSpacing.cardPadding),
+                  decoration: BoxDecoration(
+                    color: AppColors.accentLight,
+                    borderRadius: BorderRadius.circular(AppRadius.card),
+                    border: Border.all(
+                      color: AppColors.accent.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              color: statusColor.withValues(alpha: 0.15),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Icon(
-                              payload.habilitado
-                                  ? Icons.check_rounded
-                                  : Icons.close_rounded,
-                              color: statusColor,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Text(
-                              payload.habilitado
-                                  ? 'Habilitado para votar'
-                                  : 'No habilitado para votar',
-                              style: textTheme.titleMedium,
-                            ),
-                          ),
-                        ],
+                      const Icon(
+                        Icons.privacy_tip_outlined,
+                        color: AppColors.accentStrong,
+                        size: 22,
                       ),
-                      const SizedBox(height: 20),
-                      Row(
-                        children: [
-                          _StatPill(label: 'Facultad', value: payload.facultad),
-                          const SizedBox(width: 8),
-                          _StatPill(
-                            label: 'Tipo',
-                            value: payload.tipoUsuario,
-                          ),
-                        ],
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Tu voto es 100% secreto',
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                color: AppColors.ink,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              'El sistema separa por completo tu identidad institucional de tu boleta electoral. Nadie en la universidad ni en el sistema puede saber por quién votaste.',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: AppColors.inkSoft,
+                                height: 1.4,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
                 ),
-              ),
-              if (payload.habilitado) ...[
-                const SizedBox(height: AppSpacing.stack),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: () => context.push(
-                      '/registro',
-                      extra: RegistrationRouteArgs(
-                        electionId: _placeholderElectionId,
-                        assertion: result.assertion,
-                      ),
-                    ),
-                    child: const Text('Continuar al registro'),
-                  ),
-                ),
+                const SizedBox(height: AppSpacing.md),
               ],
-            ],
+            ),
           ),
         ),
       ),
     );
   }
-}
 
-class _StatPill extends StatelessWidget {
-  const _StatPill({required this.label, required this.value});
+  Widget _buildDigitalCredentialCard(dynamic payload, ThemeData theme) {
+    final bool isHabilitado = payload.habilitado as bool;
 
-  final String label;
-  final String value;
-
-  @override
-  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       decoration: BoxDecoration(
-        color: AppColors.ink,
-        borderRadius: BorderRadius.circular(AppRadius.chip),
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        border: Border.all(color: AppColors.borderSubtle),
+        boxShadow: AppShadows.card,
       ),
+      padding: const EdgeInsets.all(AppSpacing.cardPadding),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
         children: [
-          Text(
-            label,
-            style: Theme.of(
-              context,
-            ).textTheme.labelSmall?.copyWith(color: AppColors.onInk.withValues(alpha: 0.6)),
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: isHabilitado
+                      ? AppColors.successLight
+                      : AppColors.errorLight,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  isHabilitado
+                      ? Icons.check_circle_rounded
+                      : Icons.error_outline_rounded,
+                  color: isHabilitado ? AppColors.success : AppColors.error,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Registro: ${payload.sub}',
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      isHabilitado
+                          ? (_isVoteEnabledLocally
+                              ? 'Habilitado y listo para votar'
+                              : 'Habilitado en el Padrón Electoral')
+                          : 'No Habilitado para Votar',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: isHabilitado
+                            ? AppColors.success
+                            : AppColors.error,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
-          Text(
-            value,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: AppColors.onInk,
-              fontWeight: FontWeight.w600,
-            ),
+
+          const SizedBox(height: AppSpacing.md),
+          const Divider(height: 1, color: AppColors.borderSubtle),
+          const SizedBox(height: AppSpacing.md),
+
+          // Metadatos de la credencial con espacio adaptativo
+          Row(
+            children: [
+              Expanded(
+                child: _CredentialField(
+                  label: 'Facultad',
+                  value: payload.facultad as String,
+                  icon: Icons.account_balance_outlined,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: _CredentialField(
+                  label: 'Estamento',
+                  value: payload.tipoUsuario as String,
+                  icon: Icons.school_outlined,
+                ),
+              ),
+            ],
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildElectionsSection(ThemeData theme, bool habilitado) {
+    if (_loadingElections && _activeElections.isEmpty) {
+      return Container(
+        height: 160,
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          border: Border.all(color: AppColors.borderSubtle),
+        ),
+        child: const Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(color: AppColors.accentStrong),
+              SizedBox(height: AppSpacing.md),
+              Text(
+                'Cargando elecciones disponibles...',
+                style: TextStyle(color: AppColors.inkSoft, fontSize: 13),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_activeElections.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(AppSpacing.cardPadding),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(AppRadius.card),
+          border: Border.all(color: AppColors.borderSubtle),
+        ),
+        child: Column(
+          children: [
+            const Icon(
+              Icons.event_busy_rounded,
+              size: 40,
+              color: AppColors.inkMuted,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'No hay elecciones activas',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'No hay procesos de votación abiertos en este momento.',
+              textAlign: TextAlign.center,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: AppColors.inkSoft,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            OutlinedButton.icon(
+              onPressed: _fetchActiveElections,
+              icon: const Icon(Icons.refresh_rounded, size: 18),
+              label: const Text('Actualizar'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final election = _selectedElection ?? _activeElections.first;
+    final isVotingOpen = election.estado == 'VOTACION_ABIERTA';
+
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(AppRadius.card),
+        border: Border.all(color: AppColors.borderSubtle),
+        boxShadow: AppShadows.card,
+      ),
+      padding: const EdgeInsets.all(AppSpacing.cardPadding),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Selector si hay más de 1 elección
+          if (_activeElections.length > 1) ...[
+            DropdownButtonFormField<BallotElection>(
+              initialValue: _selectedElection,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'Seleccionar Elección',
+                contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              ),
+              items: _activeElections.map((e) {
+                return DropdownMenuItem(
+                  value: e,
+                  child: Text(
+                    e.nombre,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                );
+              }).toList(),
+              onChanged: (val) {
+                if (val != null) setState(() => _selectedElection = val);
+              },
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
+
+          // Estado y cantidad de candidaturas
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: isVotingOpen ? AppColors.successLight : AppColors.infoLight,
+                  borderRadius: BorderRadius.circular(AppRadius.chip),
+                  border: Border.all(
+                    color: isVotingOpen
+                        ? AppColors.success.withValues(alpha: 0.3)
+                        : AppColors.info.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Text(
+                  isVotingOpen ? 'Votación Abierta' : 'Registro de Votantes',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: isVotingOpen ? AppColors.success : AppColors.info,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${election.opciones.length} Candidaturas',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: AppColors.inkSoft,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: AppSpacing.md),
+
+          // Título de la elección
+          Text(
+            election.nombre,
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+
+          if (election.descripcion != null &&
+              election.descripcion!.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              election.descripcion!,
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: AppColors.inkSoft,
+              ),
+            ),
+          ],
+
+          const SizedBox(height: AppSpacing.lg),
+
+          // Botón único e inteligente según estado de habilitación
+          if (habilitado) ...[
+            if (_isVoteEnabledLocally) ...[
+              // Ya está habilitado para votar: Sale ÚNICAMENTE ingresar a votar
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: FilledButton.icon(
+                  onPressed: _currentElectionId != null && isVotingOpen
+                      ? () => context.push(
+                          '/votar',
+                          extra: _currentElectionId,
+                        )
+                      : null,
+                  icon: const Icon(Icons.how_to_vote_rounded, size: 20),
+                  label: Text(
+                    isVotingOpen ? 'Ingresar a votar' : 'Votación no iniciada aún',
+                  ),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.ink,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.button),
+                    ),
+                  ),
+                ),
+              ),
+            ] else ...[
+              // Aún no está habilitado: Sale ÚNICAMENTE habilitar mi voto
+              SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: FilledButton.icon(
+                  onPressed: _currentElectionId != null
+                      ? () async {
+                          await context.push(
+                            '/registro',
+                            extra: RegistrationRouteArgs(
+                              electionId: _currentElectionId!,
+                              assertion: widget.result.assertion,
+                            ),
+                          );
+                          _checkLocalIdentity();
+                        }
+                      : null,
+                  icon: const Icon(Icons.how_to_reg_rounded, size: 20),
+                  label: const Text('Habilitar mi voto'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: AppColors.ink,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.button),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ] else ...[
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: AppColors.errorLight,
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.info_outline,
+                    color: AppColors.error,
+                    size: 18,
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      'No te encuentras habilitado en el padrón de esta elección.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: AppColors.error,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _CredentialField extends StatelessWidget {
+  const _CredentialField({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Icon(icon, size: 18, color: AppColors.inkMuted),
+        const SizedBox(width: AppSpacing.xs + 2),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: AppColors.inkMuted,
+                  fontSize: 11,
+                ),
+              ),
+              Text(
+                value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: AppColors.ink,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }

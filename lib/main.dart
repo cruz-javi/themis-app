@@ -11,6 +11,7 @@ import 'core/theme/app_theme.dart';
 import 'data/repositories/demo_repository.dart';
 import 'data/repositories/mock_sso_repository.dart';
 import 'data/repositories/registration_repository.dart';
+import 'data/repositories/voting_repository.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,6 +21,7 @@ Future<void> main() async {
   final repository = HttpDemoRepository(client);
   final mockSsoRepository = HttpMockSsoRepository(client);
   final registrationRepository = HttpRegistrationRepository(client);
+  final votingRepository = HttpVotingRepository(client);
   final secureIdentityStore = SecureIdentityStore();
 
   runApp(
@@ -27,6 +29,7 @@ Future<void> main() async {
       repository: repository,
       mockSsoRepository: mockSsoRepository,
       registrationRepository: registrationRepository,
+      votingRepository: votingRepository,
       secureIdentityStore: secureIdentityStore,
     ),
   );
@@ -38,12 +41,14 @@ class ThemisApp extends StatefulWidget {
     required this.repository,
     required this.mockSsoRepository,
     required this.registrationRepository,
+    required this.votingRepository,
     required this.secureIdentityStore,
   });
 
   final DemoRepository repository;
   final MockSsoRepository mockSsoRepository;
   final RegistrationRepository registrationRepository;
+  final VotingRepository votingRepository;
   final SecureIdentityStore secureIdentityStore;
 
   @override
@@ -51,15 +56,22 @@ class ThemisApp extends StatefulWidget {
 }
 
 class _ThemisAppState extends State<ThemisApp> with WidgetsBindingObserver {
+  Timer? _presentationTimer;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _checkPendingPresentation();
+    _presentationTimer = Timer.periodic(
+      const Duration(seconds: 3),
+      (_) => _checkPendingPresentation(),
+    );
   }
 
   @override
   void dispose() {
+    _presentationTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -93,6 +105,7 @@ class _ThemisAppState extends State<ThemisApp> with WidgetsBindingObserver {
         widget.mockSsoRepository,
         widget.registrationRepository,
         widget.secureIdentityStore,
+        widget.votingRepository,
       ),
     );
   }
