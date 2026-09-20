@@ -11,6 +11,7 @@ import 'core/theme/app_theme.dart';
 import 'data/repositories/demo_repository.dart';
 import 'data/repositories/mock_sso_repository.dart';
 import 'data/repositories/registration_repository.dart';
+import 'data/repositories/vote_repository.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,6 +21,7 @@ Future<void> main() async {
   final repository = HttpDemoRepository(client);
   final mockSsoRepository = HttpMockSsoRepository(client);
   final registrationRepository = HttpRegistrationRepository(client);
+  final voteRepository = HttpVoteRepository(client);
   final secureIdentityStore = SecureIdentityStore();
 
   runApp(
@@ -27,6 +29,7 @@ Future<void> main() async {
       repository: repository,
       mockSsoRepository: mockSsoRepository,
       registrationRepository: registrationRepository,
+      voteRepository: voteRepository,
       secureIdentityStore: secureIdentityStore,
     ),
   );
@@ -38,12 +41,14 @@ class ThemisApp extends StatefulWidget {
     required this.repository,
     required this.mockSsoRepository,
     required this.registrationRepository,
+    required this.voteRepository,
     required this.secureIdentityStore,
   });
 
   final DemoRepository repository;
   final MockSsoRepository mockSsoRepository;
   final RegistrationRepository registrationRepository;
+  final VoteRepository voteRepository;
   final SecureIdentityStore secureIdentityStore;
 
   @override
@@ -92,6 +97,7 @@ class _ThemisAppState extends State<ThemisApp> with WidgetsBindingObserver {
         widget.repository,
         widget.mockSsoRepository,
         widget.registrationRepository,
+        widget.voteRepository,
         widget.secureIdentityStore,
       ),
     );

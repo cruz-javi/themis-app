@@ -3,12 +3,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../domain/entities/login_result.dart';
-import '../../domain/entities/registration_route_args.dart';
-
-// Todavia no existe una pantalla de seleccion de eleccion (CU no cubierto
-// en esta iteracion) - se usa el id de una eleccion demo sembrada a mano en
-// la BD local (REGISTRO_ABIERTO) hasta que exista esa pantalla.
-const _placeholderElectionId = 'dc03c565-85c8-452e-88a9-57a231ddff10';
 
 class LoginResultPage extends StatelessWidget {
   const LoginResultPage({super.key, required this.result});
@@ -84,17 +78,27 @@ class LoginResultPage extends StatelessWidget {
                 SizedBox(
                   width: double.infinity,
                   child: FilledButton(
+                    // La eleccion se elige en /registro/elegir (CU-05); la
+                    // assertion viaja como `extra` hasta que ese selector
+                    // arme RegistrationRouteArgs con el id real elegido.
                     onPressed: () => context.push(
-                      '/registro',
-                      extra: RegistrationRouteArgs(
-                        electionId: _placeholderElectionId,
-                        assertion: result.assertion,
-                      ),
+                      '/registro/elegir',
+                      extra: result.assertion,
                     ),
                     child: const Text('Continuar al registro'),
                   ),
                 ),
               ],
+              const SizedBox(height: AppSpacing.stack),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  // CU-10 no requiere sesion (regla 1 del CLAUDE.md raiz):
+                  // votar no depende de este login ni de la assertion.
+                  onPressed: () => context.push('/votar'),
+                  child: const Text('Ir a votar'),
+                ),
+              ),
             ],
           ),
         ),

@@ -3,18 +3,25 @@ import 'package:go_router/go_router.dart';
 import '../../data/repositories/demo_repository.dart';
 import '../../data/repositories/mock_sso_repository.dart';
 import '../../data/repositories/registration_repository.dart';
+import '../../data/repositories/vote_repository.dart';
 import '../../domain/entities/login_result.dart';
+import '../../domain/entities/public_election.dart';
 import '../../domain/entities/registration_route_args.dart';
 import '../../features/auth/login_page.dart';
 import '../../features/auth/login_result_page.dart';
 import '../../features/demo/demo_page.dart';
 import '../../features/registration/registration_page.dart';
+import '../../features/voting/ballot_page.dart';
+import '../../features/voting/election_select_page.dart';
+import '../config/env.dart';
+import '../crypto/vote_proof_bridge.dart';
 import '../storage/secure_identity_store.dart';
 
 GoRouter buildRouter(
   DemoRepository repository,
   MockSsoRepository mockSsoRepository,
   RegistrationRepository registrationRepository,
+  VoteRepository voteRepository,
   SecureIdentityStore secureIdentityStore,
 ) {
   return GoRouter(
@@ -31,6 +38,21 @@ GoRouter buildRouter(
         ),
       ),
       GoRoute(
+        path: '/registro/elegir',
+        builder: (context, state) {
+          final assertion = state.extra as String;
+          return ElectionSelectPage(
+            repository: voteRepository,
+            title: 'Elegí la elección',
+            estado: 'REGISTRO_ABIERTO',
+            onSelect: (context, election) => context.push(
+              '/registro',
+              extra: RegistrationRouteArgs(electionId: election.id, assertion: assertion),
+            ),
+          );
+        },
+      ),
+      GoRoute(
         path: '/registro',
         builder: (context, state) {
           final args = state.extra as RegistrationRouteArgs;
@@ -41,6 +63,25 @@ GoRouter buildRouter(
             assertion: args.assertion,
           );
         },
+      ),
+      GoRoute(
+        path: '/votar',
+        builder: (context, state) => ElectionSelectPage(
+          repository: voteRepository,
+          title: 'Elegí la elección',
+          estado: 'VOTACION_ABIERTA',
+          onSelect: (context, election) => context.push('/votar/boleta', extra: election),
+        ),
+      ),
+      GoRoute(
+        path: '/votar/boleta',
+        builder: (context, state) => BallotPage(
+          election: state.extra as PublicElection,
+          voteRepository: voteRepository,
+          secureIdentityStore: secureIdentityStore,
+          proofGenerator: VoteProofBridge(webBaseUrl: Env.webBaseUrl),
+          apiBaseUrl: Env.apiBaseUrl,
+        ),
       ),
       GoRoute(
         path: '/demo',

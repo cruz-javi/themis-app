@@ -21,6 +21,13 @@ class ApiClient {
     return response.data ?? <String, dynamic>{};
   }
 
+  /// Para endpoints que devuelven un array en la raiz (ej. GET
+  /// /elections/public), a diferencia de [getJson] que solo tipa objetos.
+  Future<List<dynamic>> getJsonList(String path) async {
+    final response = await _dio.get<List<dynamic>>(path);
+    return response.data ?? <dynamic>[];
+  }
+
   Future<Map<String, dynamic>> postJson(
     String path, {
     Map<String, dynamic>? body,

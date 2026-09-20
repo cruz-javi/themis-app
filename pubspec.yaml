@@ -21,6 +21,11 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
+  # Usados directamente en test/voting/ballot_page_test.dart para fakear la
+  # plataforma de flutter_secure_storage (sin esto, SecureIdentityStore
+  # intenta hablar por platform channel y el widget test falla).
+  flutter_secure_storage_platform_interface: ^1.1.2
+  plugin_platform_interface: ^2.1.8
 
 flutter:
   uses-material-design: true
