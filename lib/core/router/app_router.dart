@@ -6,7 +6,6 @@ import '../../data/repositories/registration_repository.dart';
 import '../../data/repositories/voting_repository.dart';
 import '../../domain/entities/ballot_route_args.dart';
 import '../../domain/entities/login_result.dart';
-import '../../domain/entities/public_election.dart';
 import '../../domain/entities/registration_route_args.dart';
 import '../../domain/entities/vote_receipt.dart';
 import '../../features/auth/login_page.dart';
@@ -21,7 +20,6 @@ GoRouter buildRouter(
   DemoRepository repository,
   MockSsoRepository mockSsoRepository,
   RegistrationRepository registrationRepository,
-  VoteRepository voteRepository,
   SecureIdentityStore secureIdentityStore,
   VotingRepository votingRepository,
 ) {
@@ -50,21 +48,6 @@ GoRouter buildRouter(
           votingRepository: votingRepository,
           secureIdentityStore: secureIdentityStore,
         ),
-      ),
-      GoRoute(
-        path: '/registro/elegir',
-        builder: (context, state) {
-          final assertion = state.extra as String;
-          return ElectionSelectPage(
-            repository: voteRepository,
-            title: 'Elegí la elección',
-            estado: 'REGISTRO_ABIERTO',
-            onSelect: (context, election) => context.push(
-              '/registro',
-              extra: RegistrationRouteArgs(electionId: election.id, assertion: assertion),
-            ),
-          );
-        },
       ),
       GoRoute(
         path: '/registro',
