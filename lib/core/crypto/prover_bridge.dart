@@ -24,12 +24,14 @@ class ProverBridge {
             }
           },
           onWebResourceError: (error) {
-            if (!_readyCompleter.isCompleted) {
-              _readyCompleter.completeError(
-                CryptoBridgeException(
-                  'No se pudo conectar con el generador de pruebas ZK en $_url: ${error.description}',
-                ),
-              );
+            if (error.isForMainFrame ?? true) {
+              if (!_readyCompleter.isCompleted) {
+                _readyCompleter.completeError(
+                  CryptoBridgeException(
+                    'No se pudo conectar con el generador de pruebas ZK en $_url: ${error.description}',
+                  ),
+                );
+              }
             }
           },
         ),
@@ -58,7 +60,47 @@ class ProverBridge {
     required String message,
     required String scope,
   }) async {
-    await _readyCompleter.future;
+    // Si la carga inicial falló o todavía no completó, reintentar cargar la página
+    if (_readyCompleter.isCompleted) {
+      try {
+        await _readyCompleter.future;
+      } catch (_) {
+        final retryCompleter = Completer<void>();
+        await _controller.setNavigationDelegate(
+          NavigationDelegate(
+            onPageFinished: (_) {
+              if (!retryCompleter.isCompleted) retryCompleter.complete();
+            },
+            onWebResourceError: (error) {
+              if (error.isForMainFrame ?? true) {
+                if (!retryCompleter.isCompleted) {
+                  retryCompleter.completeError(
+                    CryptoBridgeException(
+                      'No se pudo conectar con el generador de pruebas ZK en $_url: ${error.description}',
+                    ),
+                  );
+                }
+              }
+            },
+          ),
+        );
+        await _controller.loadRequest(Uri.parse(_url));
+        await retryCompleter.future.timeout(
+          const Duration(seconds: 15),
+          onTimeout: () => throw const CryptoBridgeException(
+            'Tiempo de espera agotado al conectar con el generador de pruebas ZK',
+          ),
+        );
+      }
+    } else {
+      await _readyCompleter.future.timeout(
+        const Duration(seconds: 15),
+        onTimeout: () => throw const CryptoBridgeException(
+          'Tiempo de espera agotado al inicializar el módulo criptográfico',
+        ),
+      );
+    }
+
     if (_pending != null) {
       throw const CryptoBridgeException('Ya hay una generación de prueba en curso');
     }
@@ -74,7 +116,12 @@ class ProverBridge {
 
     unawaited(_controller.runJavaScript(script));
 
-    final result = await completer.future;
+    final result = await completer.future.timeout(
+      const Duration(seconds: 60),
+      onTimeout: () => throw const CryptoBridgeException(
+        'Tiempo de espera agotado al calcular la prueba de conocimiento cero',
+      ),
+    );
     if (result['ok'] != true) {
       throw CryptoBridgeException(
         result['error'] as String? ?? 'Error generando la prueba ZK',

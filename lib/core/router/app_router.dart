@@ -31,6 +31,7 @@ GoRouter buildRouter(
       ),
       GoRoute(
         path: '/login/resultado',
+        name: 'login_resultado',
         builder: (context, state) => LoginResultPage(
           result: state.extra as LoginResult,
           votingRepository: votingRepository,

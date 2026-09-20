@@ -7,6 +7,7 @@ import '../../data/repositories/voting_repository.dart';
 import '../../domain/entities/ballot_election.dart';
 import '../../domain/entities/login_result.dart';
 import '../../domain/entities/registration_route_args.dart';
+import '../../domain/entities/vote_receipt.dart';
 
 class LoginResultPage extends StatefulWidget {
   const LoginResultPage({
@@ -27,6 +28,8 @@ class LoginResultPage extends StatefulWidget {
 class _LoginResultPageState extends State<LoginResultPage> {
   bool _loadingElections = false;
   bool _isVoteEnabledLocally = false;
+  bool _hasVotedInCurrentElection = false;
+  VoteReceipt? _currentElectionVoteReceipt;
   List<BallotElection> _activeElections = [];
   BallotElection? _selectedElection;
 
@@ -34,16 +37,35 @@ class _LoginResultPageState extends State<LoginResultPage> {
   void initState() {
     super.initState();
     _fetchActiveElections();
-    _checkLocalIdentity();
   }
 
   Future<void> _checkLocalIdentity() async {
     if (widget.secureIdentityStore == null) return;
     try {
+      final currentId = _currentElectionId ??
+          (_activeElections.isNotEmpty ? _activeElections.first.id : null);
+      if (currentId == null) {
+        if (!mounted) return;
+        setState(() {
+          _isVoteEnabledLocally = false;
+          _hasVotedInCurrentElection = false;
+          _currentElectionVoteReceipt = null;
+        });
+        return;
+      }
+
       final identity = await widget.secureIdentityStore!.read();
+      final hasSecret = identity != null && identity.isNotEmpty;
+      final receipt = await widget.secureIdentityStore!.getVoteReceipt(currentId);
+      final hasVoted = receipt != null;
+      final isRegistered =
+          await widget.secureIdentityStore!.isElectionRegistered(currentId);
+
       if (!mounted) return;
       setState(() {
-        _isVoteEnabledLocally = identity != null && identity.isNotEmpty;
+        _isVoteEnabledLocally = hasSecret && (isRegistered || hasVoted);
+        _hasVotedInCurrentElection = hasVoted;
+        _currentElectionVoteReceipt = receipt;
       });
     } catch (_) {}
   }
@@ -53,17 +75,22 @@ class _LoginResultPageState extends State<LoginResultPage> {
     setState(() => _loadingElections = true);
     try {
       final list = await widget.votingRepository!.fetchActiveElections();
-      await _checkLocalIdentity();
       if (!mounted) return;
       setState(() {
         _activeElections = list;
         if (list.isNotEmpty) {
-          _selectedElection = list.first;
+          final current = _selectedElection;
+          if (current != null && list.any((e) => e.id == current.id)) {
+            _selectedElection = list.firstWhere((e) => e.id == current.id);
+          } else {
+            _selectedElection = list.first;
+          }
         } else {
           _selectedElection = null;
         }
         _loadingElections = false;
       });
+      await _checkLocalIdentity();
     } catch (_) {
       if (!mounted) return;
       setState(() => _loadingElections = false);
@@ -100,7 +127,9 @@ class _LoginResultPageState extends State<LoginResultPage> {
           FilledButton(
             onPressed: () {
               Navigator.of(ctx).pop();
-              context.go('/login');
+              if (mounted) {
+                context.go('/login');
+              }
             },
             style: FilledButton.styleFrom(
               backgroundColor: AppColors.error,
@@ -278,7 +307,10 @@ class _LoginResultPageState extends State<LoginResultPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Registro: ${payload.sub}',
+                      widget.result.codigoInstitucional != null &&
+                              widget.result.codigoInstitucional!.isNotEmpty
+                          ? 'Estudiante: ${widget.result.codigoInstitucional}'
+                          : 'Estudiante Universitario',
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
@@ -286,9 +318,11 @@ class _LoginResultPageState extends State<LoginResultPage> {
                     const SizedBox(height: 2),
                     Text(
                       isHabilitado
-                          ? (_isVoteEnabledLocally
-                              ? 'Habilitado y listo para votar'
-                              : 'Habilitado en el Padrón Electoral')
+                          ? (_hasVotedInCurrentElection
+                              ? 'Voto emitido con éxito'
+                              : (_isVoteEnabledLocally
+                                  ? 'Habilitado y listo para votar'
+                                  : 'Habilitado en el Padrón Electoral'))
                           : 'No Habilitado para Votar',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: isHabilitado
@@ -431,7 +465,10 @@ class _LoginResultPageState extends State<LoginResultPage> {
                 );
               }).toList(),
               onChanged: (val) {
-                if (val != null) setState(() => _selectedElection = val);
+                if (val != null) {
+                  setState(() => _selectedElection = val);
+                  _checkLocalIdentity();
+                }
               },
             ),
             const SizedBox(height: AppSpacing.md),
@@ -496,25 +533,107 @@ class _LoginResultPageState extends State<LoginResultPage> {
 
           const SizedBox(height: AppSpacing.lg),
 
-          // Botón único e inteligente según estado de habilitación
+          // Botón único e inteligente según estado de votación y habilitación
           if (habilitado) ...[
-            if (_isVoteEnabledLocally) ...[
+            if (_hasVotedInCurrentElection) ...[
+              // YA VOTÓ EN ESTA ELECCIÓN: Se muestra estado completado y botón para ver constancia
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(AppSpacing.cardPadding),
+                decoration: BoxDecoration(
+                  color: AppColors.successLight.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(AppRadius.card),
+                  border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 24),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '¡Ya emitiste tu voto!',
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.success,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Tu participación fue registrada y contabilizada de manera anónima en esta elección.',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: AppColors.inkSoft,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    if (_currentElectionVoteReceipt != null) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            await context.push(
+                              '/voto/recibo',
+                              extra: _currentElectionVoteReceipt,
+                            );
+                            _checkLocalIdentity();
+                          },
+                          icon: const Icon(Icons.receipt_long_rounded, size: 18),
+                          label: const Text(
+                            'Ver constancia de voto',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            minimumSize: const Size.fromHeight(48),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 12,
+                            ),
+                            foregroundColor: AppColors.ink,
+                            side: const BorderSide(color: AppColors.borderMedium),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(AppRadius.button),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ] else if (_isVoteEnabledLocally) ...[
               // Ya está habilitado para votar: Sale ÚNICAMENTE ingresar a votar
               SizedBox(
                 width: double.infinity,
-                height: 52,
                 child: FilledButton.icon(
                   onPressed: _currentElectionId != null && isVotingOpen
-                      ? () => context.push(
-                          '/votar',
-                          extra: _currentElectionId,
-                        )
+                      ? () async {
+                          await context.push(
+                            '/votar',
+                            extra: _currentElectionId,
+                          );
+                          await _checkLocalIdentity();
+                        }
                       : null,
                   icon: const Icon(Icons.how_to_vote_rounded, size: 20),
                   label: Text(
                     isVotingOpen ? 'Ingresar a votar' : 'Votación no iniciada aún',
                   ),
                   style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(50),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     backgroundColor: AppColors.ink,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(AppRadius.button),
@@ -526,7 +645,6 @@ class _LoginResultPageState extends State<LoginResultPage> {
               // Aún no está habilitado: Sale ÚNICAMENTE habilitar mi voto
               SizedBox(
                 width: double.infinity,
-                height: 52,
                 child: FilledButton.icon(
                   onPressed: _currentElectionId != null
                       ? () async {
@@ -537,12 +655,17 @@ class _LoginResultPageState extends State<LoginResultPage> {
                               assertion: widget.result.assertion,
                             ),
                           );
-                          _checkLocalIdentity();
+                          await _checkLocalIdentity();
                         }
                       : null,
                   icon: const Icon(Icons.how_to_reg_rounded, size: 20),
                   label: const Text('Habilitar mi voto'),
                   style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(50),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     backgroundColor: AppColors.ink,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(AppRadius.button),

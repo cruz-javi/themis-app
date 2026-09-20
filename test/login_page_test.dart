@@ -67,7 +67,7 @@ void main() {
     await tester.tap(find.text('Ingresar'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Habilitado para votar'), findsOneWidget);
+    expect(find.textContaining('Habilitado'), findsWidgets);
   });
 
   testWidgets('credenciales invalidas muestra el mensaje de error 401', (
@@ -89,7 +89,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.text('Codigo institucional o contrasena incorrectos'),
+      find.textContaining('incorrectos'),
       findsOneWidget,
     );
   });

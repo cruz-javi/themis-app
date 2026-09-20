@@ -47,17 +47,26 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
+      final codigo = _codigoController.text.trim();
+      final password = _passwordController.text;
       final assertion = await widget.repository.login(
-        codigoInstitucional: _codigoController.text.trim(),
-        password: _passwordController.text,
+        codigoInstitucional: codigo,
+        password: password,
       );
       final payload = MockSsoAssertionPayload.decode(assertion);
 
       if (!mounted) return;
+      _codigoController.clear();
+      _passwordController.clear();
+      _error = null;
       setState(() => _loading = false);
       context.push(
         '/login/resultado',
-        extra: LoginResult(assertion: assertion, payload: payload),
+        extra: LoginResult(
+          assertion: assertion,
+          payload: payload,
+          codigoInstitucional: codigo,
+        ),
       );
     } on DioException catch (error) {
       if (!mounted) return;

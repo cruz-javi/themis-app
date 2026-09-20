@@ -145,11 +145,16 @@ class _RegistrationPageState extends State<RegistrationPage> {
         await widget.secureIdentityStore.markPresentationDone();
       } catch (_) {}
 
+      await widget.secureIdentityStore.markElectionRegistered(widget.electionId);
+
       if (!mounted) return;
       setState(() => _outcome = _Outcome.done);
     } on DioException catch (error) {
       if (!mounted) return;
       final notice = _mapDioError(error);
+      if (notice.isInfo) {
+        await widget.secureIdentityStore.markElectionRegistered(widget.electionId);
+      }
       setState(() {
         _outcome = notice.isInfo ? _Outcome.notice : _Outcome.error;
         _message = notice.message;
@@ -310,7 +315,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
                 SizedBox(
                   height: 52,
                   child: FilledButton.icon(
-                    onPressed: () => context.push(
+                    onPressed: () => context.pushReplacement(
                       '/votar',
                       extra: widget.electionId,
                     ),
@@ -355,7 +360,7 @@ class _RegistrationPageState extends State<RegistrationPage> {
                 SizedBox(
                   height: 52,
                   child: FilledButton.icon(
-                    onPressed: () => context.push(
+                    onPressed: () => context.pushReplacement(
                       '/votar',
                       extra: widget.electionId,
                     ),

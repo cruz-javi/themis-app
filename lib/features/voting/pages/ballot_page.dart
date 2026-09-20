@@ -156,8 +156,13 @@ class _BallotPageState extends State<BallotPage> {
         proof: proof,
       );
 
+      await widget.secureIdentityStore.saveVoteReceipt(
+        electionId: election.id,
+        receipt: receipt,
+      );
+
       if (!mounted) return;
-      context.go('/voto/recibo', extra: receipt);
+      context.pushReplacement('/voto/recibo', extra: receipt);
     } on DioException catch (dioErr) {
       if (!mounted) return;
       final data = dioErr.response?.data;
@@ -414,19 +419,23 @@ class _BallotPageState extends State<BallotPage> {
                     children: [
                       Row(
                         children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: AppColors.accentLight,
-                              borderRadius: BorderRadius.circular(AppRadius.chip),
-                              border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
-                            ),
-                            child: Text(
-                              'BOLETA ELECTORAL OFICIAL',
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: AppColors.accentStrong,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 0.5,
+                          Flexible(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: AppColors.accentLight,
+                                borderRadius: BorderRadius.circular(AppRadius.chip),
+                                border: Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
+                              ),
+                              child: Text(
+                                'BOLETA OFICIAL',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.labelSmall?.copyWith(
+                                  color: AppColors.accentStrong,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.5,
+                                ),
                               ),
                             ),
                           ),

@@ -1,4 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+
+import '../../domain/entities/vote_receipt.dart';
 
 class SecureIdentityStore {
   SecureIdentityStore({FlutterSecureStorage? storage})
@@ -65,12 +69,56 @@ class SecureIdentityStore {
   Future<void> markPresentationDone() =>
       _storage.write(key: _presentationDoneKey, value: 'true');
 
+  static String _voteReceiptKey(String electionId) => 'themis.vote_receipt.$electionId';
+
+  Future<void> saveVoteReceipt({
+    required String electionId,
+    required VoteReceipt receipt,
+  }) async {
+    final jsonStr = jsonEncode({
+      'id': receipt.id,
+      'electionId': receipt.electionId,
+      'optionId': receipt.optionId,
+      'nullifier': receipt.nullifier,
+      'txHash': receipt.txHash,
+      'createdAt': receipt.createdAt.toUtc().toIso8601String(),
+    });
+    await _storage.write(key: _voteReceiptKey(electionId), value: jsonStr);
+  }
+
+  Future<VoteReceipt?> getVoteReceipt(String electionId) async {
+    final str = await _storage.read(key: _voteReceiptKey(electionId));
+    if (str == null) return null;
+    try {
+      final json = jsonDecode(str) as Map<String, dynamic>;
+      return VoteReceipt.fromJson(json);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<bool> hasVoted(String electionId) async {
+    final str = await _storage.read(key: _voteReceiptKey(electionId));
+    return str != null && str.isNotEmpty;
+  }
+
+  static String _electionRegisteredKey(String electionId) =>
+      'themis.election.$electionId.registered';
+
+  Future<void> markElectionRegistered(String electionId) async {
+    await _storage.write(key: _electionRegisteredKey(electionId), value: 'true');
+  }
+
+  Future<bool> isElectionRegistered(String electionId) async {
+    final val = await _storage.read(key: _electionRegisteredKey(electionId));
+    if (val == 'true') return true;
+    final hasReceipt = await hasVoted(electionId);
+    if (hasReceipt) return true;
+    final legacyElectionId = await _storage.read(key: _presentationElectionIdKey);
+    return legacyElectionId == electionId;
+  }
+
   Future<void> clear() async {
-    await _storage.delete(key: _identityKey);
-    await _storage.delete(key: _credentialPreparedMessageKey);
-    await _storage.delete(key: _credentialSignatureKey);
-    await _storage.delete(key: _presentationElectionIdKey);
-    await _storage.delete(key: _presentationPresentAtKey);
-    await _storage.delete(key: _presentationDoneKey);
+    await _storage.deleteAll();
   }
 }

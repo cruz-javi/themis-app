@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/theme/app_theme.dart';
@@ -35,16 +34,43 @@ class VoteReceiptPage extends StatelessWidget {
     );
   }
 
+  String _formatDateTime(DateTime dt) {
+    final local = dt.toLocal();
+    final day = local.day.toString().padLeft(2, '0');
+    final month = local.month.toString().padLeft(2, '0');
+    final year = local.year;
+    final hour = local.hour.toString().padLeft(2, '0');
+    final minute = local.minute.toString().padLeft(2, '0');
+    return '$day/$month/$year a las $hour:$minute hrs';
+  }
+
+  void _returnToDashboard(BuildContext context) {
+    Navigator.of(context).popUntil((route) {
+      if (route.settings.name == 'login_resultado' ||
+          route.settings.name == '/login/resultado') {
+        return true;
+      }
+      return route.isFirst;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Constancia de Votación'),
-        automaticallyImplyLeading: false,
-      ),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) {
+          _returnToDashboard(context);
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          title: const Text('Constancia Oficial'),
+          automaticallyImplyLeading: false,
+        ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(
@@ -54,33 +80,33 @@ class VoteReceiptPage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // 1. Cabecera limpia de éxito sin logos repetidos
+              // 1. Cabecera limpia y tranquilizadora
               Center(
                 child: Column(
                   children: [
                     Container(
-                      width: 52,
-                      height: 52,
+                      width: 56,
+                      height: 56,
                       decoration: const BoxDecoration(
                         color: AppColors.successLight,
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
                         Icons.check_rounded,
-                        size: 30,
+                        size: 32,
                         color: AppColors.success,
                       ),
                     ),
                     const SizedBox(height: AppSpacing.md),
                     Text(
-                      '¡Voto Emitido con Éxito!',
+                      '¡Voto Registrado con Éxito!',
                       style: theme.textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.w800,
                       ),
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     Text(
-                      'Tu participación ha sido registrada de forma segura y secreta.',
+                      'Tu participación ha sido contabilizada de forma segura, anónima y secreta.',
                       textAlign: TextAlign.center,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: AppColors.inkSoft,
@@ -92,7 +118,7 @@ class VoteReceiptPage extends StatelessWidget {
 
               const SizedBox(height: AppSpacing.lg),
 
-              // 2. Tarjeta de Constancia Oficial de Participación
+              // 2. Tarjeta simplificada de participación ciudadana
               Container(
                 decoration: BoxDecoration(
                   color: AppColors.surface,
@@ -107,18 +133,40 @@ class VoteReceiptPage extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          'CONSTANCIA DE PARTICIPACIÓN',
-                          style: theme.textTheme.labelSmall?.copyWith(
-                            letterSpacing: 0.5,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.inkMuted,
+                        Expanded(
+                          child: Text(
+                            'COMPROBANTE OFICIAL',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              letterSpacing: 0.5,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.inkMuted,
+                            ),
                           ),
                         ),
-                        const Icon(
-                          Icons.verified_outlined,
-                          size: 18,
-                          color: AppColors.success,
+                        const SizedBox(width: AppSpacing.sm),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppColors.successLight,
+                            borderRadius: BorderRadius.circular(AppRadius.chip),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.check_circle_rounded, size: 12, color: AppColors.success),
+                              SizedBox(width: 4),
+                              Text(
+                                'REGISTRADO',
+                                style: TextStyle(
+                                  color: AppColors.success,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -126,34 +174,57 @@ class VoteReceiptPage extends StatelessWidget {
                     const Divider(height: 1, color: AppColors.borderSubtle),
                     const SizedBox(height: AppSpacing.md),
 
-                    _ReceiptField(
-                      label: 'Código de Confirmación',
-                      value: receipt.txHash,
-                      canCopy: true,
-                      onCopy: () => _copyToClipboard(
-                        context,
-                        receipt.txHash,
-                        'Código de confirmación',
-                      ),
+                    // Campos legibles
+                    _SimpleField(
+                      label: 'Fecha y hora de emisión',
+                      value: _formatDateTime(receipt.createdAt),
+                      icon: Icons.calendar_today_rounded,
                     ),
                     const SizedBox(height: AppSpacing.md),
 
-                    _ReceiptField(
-                      label: 'Identificador de Verificación',
-                      value: receipt.nullifier,
-                      canCopy: true,
-                      onCopy: () => _copyToClipboard(
-                        context,
-                        receipt.nullifier,
-                        'Identificador',
-                      ),
+                    const _SimpleField(
+                      label: 'Método de votación',
+                      value: 'Voto secreto mediante conocimiento cero (ZK)',
+                      icon: Icons.shield_rounded,
                     ),
                     const SizedBox(height: AppSpacing.md),
 
-                    _ReceiptField(
-                      label: 'Fecha y Hora',
-                      value: receipt.createdAt.toUtc().toIso8601String(),
-                      canCopy: false,
+                    const _SimpleField(
+                      label: 'Estado en la urna digital',
+                      value: 'Contabilizado y validado en Blockchain',
+                      icon: Icons.done_all_rounded,
+                    ),
+
+                    const SizedBox(height: AppSpacing.md),
+                    const Divider(height: 1, color: AppColors.borderSubtle),
+
+                    // Sección colapsable para quien requiera auditoría técnica avanzada
+                    Theme(
+                      data: theme.copyWith(dividerColor: Colors.transparent),
+                      child: ExpansionTile(
+                        tilePadding: EdgeInsets.zero,
+                        childrenPadding: const EdgeInsets.only(top: AppSpacing.xs),
+                        title: Text(
+                          'Datos técnicos de verificación',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: AppColors.inkMuted,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        children: [
+                          _TechnicalField(
+                            label: 'Hash de Transacción On-Chain',
+                            value: receipt.txHash,
+                            onCopy: () => _copyToClipboard(context, receipt.txHash, 'Hash de transacción'),
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                          _TechnicalField(
+                            label: 'Nullifier Criptográfico',
+                            value: receipt.nullifier,
+                            onCopy: () => _copyToClipboard(context, receipt.nullifier, 'Nullifier'),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -180,7 +251,7 @@ class VoteReceiptPage extends StatelessWidget {
                     const SizedBox(width: AppSpacing.sm),
                     Expanded(
                       child: Text(
-                        'Este comprobante certifica que tu voto fue recibido y contabilizado sin vincular tu nombre con tu elección.',
+                        'Tu voto está blindado matemáticamente. Nadie en la universidad, ni los jurados ni el sistema pueden vincular tu nombre con la opción elegida.',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: AppColors.inkSoft,
                           height: 1.4,
@@ -193,18 +264,19 @@ class VoteReceiptPage extends StatelessWidget {
 
               const SizedBox(height: AppSpacing.xl),
 
-              // 4. Botón de Finalización
+              // 4. Botón de Regreso directo al Panel Principal (sin cerrar sesión)
               SizedBox(
                 height: 52,
-                child: FilledButton(
-                  onPressed: () => context.go('/login'),
+                child: FilledButton.icon(
+                  onPressed: () => _returnToDashboard(context),
+                  icon: const Icon(Icons.arrow_back_rounded, size: 20),
+                  label: const Text('Volver al panel principal'),
                   style: FilledButton.styleFrom(
                     backgroundColor: AppColors.ink,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(AppRadius.button),
                     ),
                   ),
-                  child: const Text('Volver al inicio'),
                 ),
               ),
               const SizedBox(height: AppSpacing.md),
@@ -212,77 +284,121 @@ class VoteReceiptPage extends StatelessWidget {
           ),
         ),
       ),
+      ),
     );
   }
 }
 
-class _ReceiptField extends StatelessWidget {
-  const _ReceiptField({
+class _SimpleField extends StatelessWidget {
+  const _SimpleField({
     required this.label,
     required this.value,
-    required this.canCopy,
-    this.onCopy,
+    required this.icon,
   });
 
   final String label;
   final String value;
-  final bool canCopy;
-  final VoidCallback? onCopy;
+  final IconData icon;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Column(
+    return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          label,
-          style: theme.textTheme.labelSmall?.copyWith(
-            fontWeight: FontWeight.w600,
-            color: AppColors.inkSoft,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        Container(
-          padding: const EdgeInsets.symmetric(
-            horizontal: AppSpacing.sm + 2,
-            vertical: AppSpacing.sm,
-          ),
-          decoration: BoxDecoration(
-            color: AppColors.surfaceVariant,
-            borderRadius: BorderRadius.circular(AppRadius.sm),
-            border: Border.all(color: AppColors.borderSubtle),
-          ),
-          child: Row(
+        Icon(icon, size: 18, color: AppColors.accentStrong),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Text(
-                  value,
-                  style: GoogleFonts.jetBrainsMono(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                    color: AppColors.ink,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+              Text(
+                label,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: AppColors.inkMuted,
+                  fontSize: 11,
                 ),
               ),
-              if (canCopy && onCopy != null) ...[
-                const SizedBox(width: AppSpacing.xs),
-                IconButton(
-                  icon: const Icon(Icons.copy_rounded, size: 16),
-                  color: AppColors.inkSoft,
-                  onPressed: onCopy,
-                  tooltip: 'Copiar',
-                  constraints: const BoxConstraints(),
-                  padding: const EdgeInsets.all(4),
+              const SizedBox(height: 2),
+              Text(
+                value,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.ink,
                 ),
-              ],
+              ),
             ],
           ),
         ),
       ],
+    );
+  }
+}
+
+class _TechnicalField extends StatelessWidget {
+  const _TechnicalField({
+    required this.label,
+    required this.value,
+    required this.onCopy,
+  });
+
+  final String label;
+  final String value;
+  final VoidCallback onCopy;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.sm),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceVariant,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        border: Border.all(color: AppColors.borderSubtle),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                label,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: AppColors.inkSoft,
+                  fontSize: 10,
+                ),
+              ),
+              InkWell(
+                onTap: onCopy,
+                child: const Padding(
+                  padding: EdgeInsets.all(2),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.copy_rounded, size: 12, color: AppColors.inkSoft),
+                      SizedBox(width: 2),
+                      Text('Copiar', style: TextStyle(fontSize: 10, color: AppColors.inkSoft)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: GoogleFonts.jetBrainsMono(
+              fontSize: 10,
+              color: AppColors.ink,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
     );
   }
 }

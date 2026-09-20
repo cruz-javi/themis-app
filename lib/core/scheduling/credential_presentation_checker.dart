@@ -16,7 +16,6 @@ Future<void> maybePresentPendingCredential({
   required RegistrationRepository repository,
 }) async {
   if (await secureIdentityStore.isPresentationDone()) {
-    debugPrint('[credential-presentation] ya estaba marcada como presentada, no hago nada');
     return;
   }
 
