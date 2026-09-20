@@ -47,9 +47,9 @@ class VoteReceiptPage extends StatelessWidget {
 
   void _returnToDashboard(BuildContext context) {
     if (context.canPop()) {
-      context.pop();
+      context.pop(true);
     } else {
-      Navigator.of(context).pop();
+      context.go('/login');
     }
   }
 

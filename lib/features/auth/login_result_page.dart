@@ -36,6 +36,8 @@ class _LoginResultPageState extends State<LoginResultPage> {
   List<BallotElection> _activeElections = [];
   BallotElection? _selectedElection;
 
+  bool _isCheckingStatus = false;
+
   @override
   void initState() {
     super.initState();
@@ -54,11 +56,31 @@ class _LoginResultPageState extends State<LoginResultPage> {
           _isVoteEnabledLocally = false;
           _hasVotedInCurrentElection = false;
           _currentElectionVoteReceipt = null;
+          _isCheckingStatus = false;
         });
         return;
       }
 
-      // 1. Consultar estado en el padrón electoral oficial (backend)
+      // 1. VERIFICACIÓN LOCAL INMEDIATA (0 ms)
+      // Si el elector ya votó en este dispositivo, actualizamos al instante
+      // sin esperar la respuesta de la red para evitar parpadeos o doble clic.
+      String? identity = await widget.secureIdentityStore!.read();
+      final localReceipt = await widget.secureIdentityStore!.getVoteReceipt(currentId);
+      final localHasVoted = localReceipt != null;
+      final localIsRegistered =
+          await widget.secureIdentityStore!.isElectionRegistered(currentId);
+
+      if (!mounted) return;
+      setState(() {
+        if (localHasVoted) {
+          _hasVotedInCurrentElection = true;
+          _isVoteEnabledLocally = false;
+          _currentElectionVoteReceipt = localReceipt;
+        }
+        _isCheckingStatus = true;
+      });
+
+      // 2. VERIFICACIÓN EN PADRÓN ELECTORAL (Servidor)
       bool serverHasVoted = false;
       bool serverIsRegistered = false;
       if (widget.votingRepository != null && widget.result.assertion.isNotEmpty) {
@@ -70,19 +92,12 @@ class _LoginResultPageState extends State<LoginResultPage> {
           serverHasVoted = status.hasVoted;
           serverIsRegistered = status.isRegistered;
           debugPrint(
-            '[voter-status] Respuesta servidor para eleccion $currentId: isRegistered=${status.isRegistered}, hasVoted=${status.hasVoted}',
+            '[voter-status] Servidor ($currentId): isRegistered=${status.isRegistered}, hasVoted=${status.hasVoted}',
           );
         } catch (e) {
-          debugPrint('[voter-status] Error al consultar estado del elector en servidor: $e');
+          debugPrint('[voter-status] Error al consultar servidor: $e');
         }
       }
-
-      // 2. Verificar datos locales
-      String? identity = await widget.secureIdentityStore!.read();
-      final localReceipt = await widget.secureIdentityStore!.getVoteReceipt(currentId);
-      final localHasVoted = localReceipt != null;
-      final localIsRegistered =
-          await widget.secureIdentityStore!.isElectionRegistered(currentId);
 
       final hasVoted = serverHasVoted || localHasVoted;
       final isRegistered = serverIsRegistered || localIsRegistered;
@@ -114,8 +129,13 @@ class _LoginResultPageState extends State<LoginResultPage> {
         _hasVotedInCurrentElection = hasVoted;
         _isVoteEnabledLocally = hasSecret && isRegistered && !hasVoted;
         _currentElectionVoteReceipt = localReceipt;
+        _isCheckingStatus = false;
       });
-    } catch (_) {}
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isCheckingStatus = false);
+      }
+    }
   }
 
   Future<void> _fetchActiveElections() async {
@@ -664,7 +684,7 @@ class _LoginResultPageState extends State<LoginResultPage> {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: _currentElectionId != null && isVotingOpen
+                  onPressed: _currentElectionId != null && isVotingOpen && !_isCheckingStatus
                       ? () async {
                           await context.push(
                             '/votar',
@@ -676,9 +696,20 @@ class _LoginResultPageState extends State<LoginResultPage> {
                           await _checkLocalIdentity();
                         }
                       : null,
-                  icon: const Icon(Icons.how_to_vote_rounded, size: 20),
+                  icon: _isCheckingStatus
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.how_to_vote_rounded, size: 20),
                   label: Text(
-                    isVotingOpen ? 'Ingresar a votar' : 'Votación no iniciada aún',
+                    _isCheckingStatus
+                        ? 'Verificando estado...'
+                        : (isVotingOpen ? 'Ingresar a votar' : 'Votación no iniciada aún'),
                   ),
                   style: FilledButton.styleFrom(
                     minimumSize: const Size.fromHeight(50),
@@ -698,7 +729,7 @@ class _LoginResultPageState extends State<LoginResultPage> {
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
-                  onPressed: _currentElectionId != null
+                  onPressed: _currentElectionId != null && !_isCheckingStatus
                       ? () async {
                           await context.push(
                             '/registro',
@@ -713,8 +744,19 @@ class _LoginResultPageState extends State<LoginResultPage> {
                           await _checkLocalIdentity();
                         }
                       : null,
-                  icon: const Icon(Icons.how_to_reg_rounded, size: 20),
-                  label: const Text('Habilitar mi voto'),
+                  icon: _isCheckingStatus
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.how_to_reg_rounded, size: 20),
+                  label: Text(
+                    _isCheckingStatus ? 'Verificando padrón...' : 'Habilitar mi voto',
+                  ),
                   style: FilledButton.styleFrom(
                     minimumSize: const Size.fromHeight(50),
                     padding: const EdgeInsets.symmetric(
