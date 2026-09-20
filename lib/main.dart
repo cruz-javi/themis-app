@@ -104,6 +104,7 @@ class _ThemisAppState extends State<ThemisApp> with WidgetsBindingObserver {
         widget.repository,
         widget.mockSsoRepository,
         widget.registrationRepository,
+        widget.voteRepository,
         widget.secureIdentityStore,
         widget.votingRepository,
       ),

@@ -61,6 +61,21 @@ timing (IP/momento del request), no una garantía criptográfica — el reemplaz
 que se construya para CU-10, pendiente. Detalle completo del protocolo en
 `themis-core/src/modules/registration/README.md`.
 
+## CU-10 (voto): implementado
+
+`lib/core/crypto/vote_proof_bridge.dart` (`VoteProofBridge`, interfaz `VoteProofGenerator` para poder
+inyectar un fake en tests) carga `$webBaseUrl/prove` de `themis-web` en un WebView remoto (a diferencia
+de `CryptoBridge`, que carga un asset local) y genera la prueba zk-SNARK real ahí — mismo patrón
+`JavaScriptChannel`+`Completer`, canal separado (`ThemisVoteChannel`), y con un timeout explícito de 45s
+que `CryptoBridge` todavía no tiene. `lib/features/voting/election_select_page.dart` (genérico, también
+resuelve el placeholder que tenía `login_result_page.dart` para CU-05) y `ballot_page.dart` completan el
+flujo: leer la identidad ya guardada por CU-05 (`SecureIdentityStore.read()`), generar la prueba, y
+`POST /elections/:id/votes` vía `VoteRepository`. Verificado end-to-end (incluida la generación real de
+la prueba y el rechazo real de doble voto) desde `themis-core/scripts/manual-test-full-flow.ts` —
+correr `flutter run` manualmente en dispositivo/Chrome sigue siendo necesario para validar el WebView
+real, ver `test/voting/ballot_page_test.dart` para lo que sí cubre `flutter test` (todo excepto la
+generación real de la prueba).
+
 ## Auth — todavía sin implementar
 
 `ApiClient` (`lib/core/network/api_client.dart`) es un wrapper de Dio genérico sin ningún interceptor de auth todavía. El login de plataforma de themis-core (`/auth/login`) usa **cookies httpOnly**, lo cual no es el patrón natural para un cliente móvil nativo (requeriría `cookie_jar`/`dio_cookie_manager` y persistencia manual) — pero ese login es para Admin/Autoridad/Auditor, probablemente **no** para el flujo del votante en esta app. El flujo del votante pasa por `/mock-sso/login` (sin cookies, devuelve una assertion de elegibilidad) seguido de la generación local de identidad Semaphore. Antes de escribir el cliente de auth de esta app, confirmar contra `themis-core/src/modules/mock-sso/README.md` el contrato exacto de esa respuesta.
