@@ -16,11 +16,13 @@ class BallotPage extends StatefulWidget {
     required this.votingRepository,
     required this.secureIdentityStore,
     this.electionId,
+    this.assertion,
   });
 
   final VotingRepository votingRepository;
   final SecureIdentityStore secureIdentityStore;
   final String? electionId;
+  final String? assertion;
 
   @override
   State<BallotPage> createState() => _BallotPageState();
@@ -154,6 +156,7 @@ class _BallotPageState extends State<BallotPage> {
         electionId: election.id,
         optionId: option.id,
         proof: proof,
+        assertion: widget.assertion,
       );
 
       await widget.secureIdentityStore.saveVoteReceipt(

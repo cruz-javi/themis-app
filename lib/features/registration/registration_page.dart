@@ -10,6 +10,7 @@ import '../../core/crypto/crypto_bridge_exception.dart';
 import '../../core/storage/secure_identity_store.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/repositories/registration_repository.dart';
+import '../../domain/entities/ballot_route_args.dart';
 import 'widgets/registration_steps.dart';
 
 enum _Outcome { working, done, error, notice }
@@ -70,12 +71,14 @@ class RegistrationPage extends StatefulWidget {
     required this.secureIdentityStore,
     required this.electionId,
     required this.assertion,
+    this.sub,
   });
 
   final RegistrationRepository repository;
   final SecureIdentityStore secureIdentityStore;
   final String electionId;
   final String assertion;
+  final String? sub;
 
   @override
   State<RegistrationPage> createState() => _RegistrationPageState();
@@ -97,7 +100,10 @@ class _RegistrationPageState extends State<RegistrationPage> {
 
   Future<void> _run() async {
     try {
-      final identity = await _bridge.generateIdentity();
+      final seed = widget.sub != null && widget.sub!.isNotEmpty
+          ? 'themis:voter:${widget.sub}'
+          : null;
+      final identity = await _bridge.generateIdentity(seed: seed);
       if (!mounted) return;
       setState(() => _stepIndex = 1);
       await widget.secureIdentityStore.write(identity.privateKey);
@@ -317,7 +323,10 @@ class _RegistrationPageState extends State<RegistrationPage> {
                   child: FilledButton.icon(
                     onPressed: () => context.pushReplacement(
                       '/votar',
-                      extra: widget.electionId,
+                      extra: BallotRouteArgs(
+                        electionId: widget.electionId,
+                        assertion: widget.assertion,
+                      ),
                     ),
                     icon: const Icon(Icons.how_to_vote_rounded),
                     label: const Text('Ir a la Cabina de Votación'),
@@ -362,7 +371,10 @@ class _RegistrationPageState extends State<RegistrationPage> {
                   child: FilledButton.icon(
                     onPressed: () => context.pushReplacement(
                       '/votar',
-                      extra: widget.electionId,
+                      extra: BallotRouteArgs(
+                        electionId: widget.electionId,
+                        assertion: widget.assertion,
+                      ),
                     ),
                     icon: const Icon(Icons.how_to_vote_rounded),
                     label: const Text('Ingresar a votar'),

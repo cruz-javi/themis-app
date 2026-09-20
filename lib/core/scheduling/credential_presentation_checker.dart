@@ -21,7 +21,6 @@ Future<void> maybePresentPendingCredential({
 
   final schedule = await secureIdentityStore.readPresentationSchedule();
   if (schedule == null) {
-    debugPrint('[credential-presentation] no hay ningun schedule guardado');
     return;
   }
   final now = DateTime.now().toUtc();

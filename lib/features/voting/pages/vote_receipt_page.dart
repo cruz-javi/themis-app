@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../../core/theme/app_theme.dart';
@@ -45,13 +46,11 @@ class VoteReceiptPage extends StatelessWidget {
   }
 
   void _returnToDashboard(BuildContext context) {
-    Navigator.of(context).popUntil((route) {
-      if (route.settings.name == 'login_resultado' ||
-          route.settings.name == '/login/resultado') {
-        return true;
-      }
-      return route.isFirst;
-    });
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      Navigator.of(context).pop();
+    }
   }
 
   @override

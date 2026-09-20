@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/crypto/crypto_bridge.dart';
 import '../../core/storage/secure_identity_store.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/repositories/voting_repository.dart';
 import '../../domain/entities/ballot_election.dart';
+import '../../domain/entities/ballot_route_args.dart';
 import '../../domain/entities/login_result.dart';
 import '../../domain/entities/registration_route_args.dart';
 import '../../domain/entities/vote_receipt.dart';
@@ -26,6 +28,7 @@ class LoginResultPage extends StatefulWidget {
 }
 
 class _LoginResultPageState extends State<LoginResultPage> {
+  late final CryptoBridge _cryptoBridge;
   bool _loadingElections = false;
   bool _isVoteEnabledLocally = false;
   bool _hasVotedInCurrentElection = false;
@@ -36,6 +39,7 @@ class _LoginResultPageState extends State<LoginResultPage> {
   @override
   void initState() {
     super.initState();
+    _cryptoBridge = CryptoBridge();
     _fetchActiveElections();
   }
 
@@ -54,18 +58,62 @@ class _LoginResultPageState extends State<LoginResultPage> {
         return;
       }
 
-      final identity = await widget.secureIdentityStore!.read();
-      final hasSecret = identity != null && identity.isNotEmpty;
-      final receipt = await widget.secureIdentityStore!.getVoteReceipt(currentId);
-      final hasVoted = receipt != null;
-      final isRegistered =
+      // 1. Consultar estado en el padrón electoral oficial (backend)
+      bool serverHasVoted = false;
+      bool serverIsRegistered = false;
+      if (widget.votingRepository != null && widget.result.assertion.isNotEmpty) {
+        try {
+          final status = await widget.votingRepository!.fetchVoterStatus(
+            electionId: currentId,
+            assertion: widget.result.assertion,
+          );
+          serverHasVoted = status.hasVoted;
+          serverIsRegistered = status.isRegistered;
+          debugPrint(
+            '[voter-status] Respuesta servidor para eleccion $currentId: isRegistered=${status.isRegistered}, hasVoted=${status.hasVoted}',
+          );
+        } catch (e) {
+          debugPrint('[voter-status] Error al consultar estado del elector en servidor: $e');
+        }
+      }
+
+      // 2. Verificar datos locales
+      String? identity = await widget.secureIdentityStore!.read();
+      final localReceipt = await widget.secureIdentityStore!.getVoteReceipt(currentId);
+      final localHasVoted = localReceipt != null;
+      final localIsRegistered =
           await widget.secureIdentityStore!.isElectionRegistered(currentId);
+
+      final hasVoted = serverHasVoted || localHasVoted;
+      final isRegistered = serverIsRegistered || localIsRegistered;
+
+      // Si el servidor confirma que está registrado pero la identidad local se borró
+      // (ej. tras borrar datos de la app o cambio de equipo), se restaura determinísticamente.
+      if (isRegistered) {
+        if (identity == null || identity.isEmpty) {
+          try {
+            final sub = widget.result.payload.sub.isNotEmpty
+                ? widget.result.payload.sub
+                : widget.result.codigoInstitucional;
+            if (sub != null && sub.isNotEmpty) {
+              final derived = await _cryptoBridge.generateIdentity(
+                seed: 'themis:voter:$sub',
+              );
+              await widget.secureIdentityStore!.write(derived.privateKey);
+              identity = derived.privateKey;
+            }
+          } catch (_) {}
+        }
+        await widget.secureIdentityStore!.markElectionRegistered(currentId);
+      }
+
+      final hasSecret = identity != null && identity.isNotEmpty;
 
       if (!mounted) return;
       setState(() {
-        _isVoteEnabledLocally = hasSecret && (isRegistered || hasVoted);
         _hasVotedInCurrentElection = hasVoted;
-        _currentElectionVoteReceipt = receipt;
+        _isVoteEnabledLocally = hasSecret && isRegistered && !hasVoted;
+        _currentElectionVoteReceipt = localReceipt;
       });
     } catch (_) {}
   }
@@ -125,8 +173,9 @@ class _LoginResultPageState extends State<LoginResultPage> {
             child: const Text('Cancelar', style: TextStyle(color: AppColors.inkSoft)),
           ),
           FilledButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.of(ctx).pop();
+              await widget.secureIdentityStore?.clear();
               if (mounted) {
                 context.go('/login');
               }
@@ -619,7 +668,10 @@ class _LoginResultPageState extends State<LoginResultPage> {
                       ? () async {
                           await context.push(
                             '/votar',
-                            extra: _currentElectionId,
+                            extra: BallotRouteArgs(
+                              electionId: _currentElectionId!,
+                              assertion: widget.result.assertion,
+                            ),
                           );
                           await _checkLocalIdentity();
                         }
@@ -653,6 +705,9 @@ class _LoginResultPageState extends State<LoginResultPage> {
                             extra: RegistrationRouteArgs(
                               electionId: _currentElectionId!,
                               assertion: widget.result.assertion,
+                              sub: widget.result.payload.sub.isNotEmpty
+                                  ? widget.result.payload.sub
+                                  : widget.result.codigoInstitucional,
                             ),
                           );
                           await _checkLocalIdentity();

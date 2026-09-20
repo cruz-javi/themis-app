@@ -2,16 +2,22 @@ import '../../core/network/api_client.dart';
 import '../../domain/entities/ballot_election.dart';
 import '../../domain/entities/merkle_tree_data.dart';
 import '../../domain/entities/vote_receipt.dart';
+import '../../domain/entities/voter_status.dart';
 import '../../domain/entities/zk_vote_proof.dart';
 
 abstract class VotingRepository {
   Future<List<BallotElection>> fetchActiveElections();
   Future<BallotElection> fetchElectionDetails(String electionId);
   Future<MerkleTreeData> fetchMerkleTree(String electionId);
+  Future<VoterStatus> fetchVoterStatus({
+    required String electionId,
+    required String assertion,
+  });
   Future<VoteReceipt> castVote({
     required String electionId,
     required String optionId,
     required ZkVoteProof proof,
+    String? assertion,
   });
 }
 
@@ -41,16 +47,30 @@ class HttpVotingRepository implements VotingRepository {
   }
 
   @override
+  Future<VoterStatus> fetchVoterStatus({
+    required String electionId,
+    required String assertion,
+  }) async {
+    final json = await _client.postJson(
+      '/elections/$electionId/voter-status',
+      body: {'assertion': assertion},
+    );
+    return VoterStatus.fromJson(json);
+  }
+
+  @override
   Future<VoteReceipt> castVote({
     required String electionId,
     required String optionId,
     required ZkVoteProof proof,
+    String? assertion,
   }) async {
     final json = await _client.postJson(
       '/elections/$electionId/votes',
       body: {
         'optionId': optionId,
         'proof': proof.toJson(),
+        if (assertion != null && assertion.isNotEmpty) 'assertion': assertion,
       },
     );
     return VoteReceipt.fromJson(json);

@@ -4,6 +4,7 @@ import '../../data/repositories/demo_repository.dart';
 import '../../data/repositories/mock_sso_repository.dart';
 import '../../data/repositories/registration_repository.dart';
 import '../../data/repositories/voting_repository.dart';
+import '../../domain/entities/ballot_route_args.dart';
 import '../../domain/entities/login_result.dart';
 import '../../domain/entities/registration_route_args.dart';
 import '../../domain/entities/vote_receipt.dart';
@@ -27,11 +28,21 @@ GoRouter buildRouter(
     routes: [
       GoRoute(
         path: '/login',
-        builder: (context, state) => LoginPage(repository: mockSsoRepository),
+        builder: (context, state) => LoginPage(
+          repository: mockSsoRepository,
+        ),
       ),
       GoRoute(
         path: '/login/resultado',
         name: 'login_resultado',
+        builder: (context, state) => LoginResultPage(
+          result: state.extra as LoginResult,
+          votingRepository: votingRepository,
+          secureIdentityStore: secureIdentityStore,
+        ),
+      ),
+      GoRoute(
+        path: '/login/result',
         builder: (context, state) => LoginResultPage(
           result: state.extra as LoginResult,
           votingRepository: votingRepository,
@@ -47,18 +58,29 @@ GoRouter buildRouter(
             secureIdentityStore: secureIdentityStore,
             electionId: args.electionId,
             assertion: args.assertion,
+            sub: args.sub,
           );
         },
       ),
       GoRoute(
         path: '/votar',
         builder: (context, state) {
-          final electionId =
-              state.uri.queryParameters['electionId'] ?? (state.extra as String?);
+          final extra = state.extra;
+          String? electionId;
+          String? assertion;
+          if (extra is BallotRouteArgs) {
+            electionId = extra.electionId;
+            assertion = extra.assertion;
+          } else if (extra is String) {
+            electionId = extra;
+          } else {
+            electionId = state.uri.queryParameters['electionId'];
+          }
           return BallotPage(
             votingRepository: votingRepository,
             secureIdentityStore: secureIdentityStore,
             electionId: electionId,
+            assertion: assertion,
           );
         },
       ),
