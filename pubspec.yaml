@@ -9,6 +9,11 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  # La identidad Semaphore se deriva de una frase mnemonica BIP-39 que custodia
+  # el votante (ver lib/core/crypto/identity_seed.dart). Paquete Dart puro: no
+  # usa platform channels, asi que los widget tests siguen funcionando.
+  bip39: ^1.0.6
+  crypto: ^3.0.6
   cupertino_icons: ^1.0.8
   dio: ^5.7.0
   flutter_dotenv: ^5.2.1

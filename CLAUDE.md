@@ -22,7 +22,11 @@ flutter run
 
 `lib/core/storage/secure_identity_store.dart` guarda el secreto Semaphore en `flutter_secure_storage`. **Nunca debe salir del dispositivo ni enviarse al backend.** Importante para cualquier feature nueva: mobile-only **no es lo mismo** que "llave no exportable del chip" — `flutter_secure_storage` cifra el valor pero sigue siendo legible/copiable si el dispositivo está desbloqueado o comprometido (no vive en el Secure Enclave/Keystore de forma no-exportable). Ver sección 5.1 del documento de diseño consolidado para el detalle completo de esta limitación reconocida.
 
-**Riesgo abierto sin resolver todavía:** si el votante pierde el celular o hace reset de fábrica entre registro y voto, el secreto se pierde sin recuperación (no hay copia en servidor). Propuesta pendiente de decisión en equipo: frase mnemónica BIP-39 (paquete `bip39` + derivación determinística vía `@semaphore-protocol/*`) — ver sección 6 del documento consolidado antes de tocar `secure_identity_store.dart` para esto.
+**Frase mnemónica BIP-39 (implementado).** La identidad Semaphore se deriva de 12 palabras que custodia el votante: `lib/core/crypto/identity_seed.dart` (`generateMnemonic`, `isValidMnemonic`, `seedFromMnemonic`), con respaldo en `lib/features/registration/pages/mnemonic_backup_page.dart` y restauración en `lib/features/recovery/pages/restore_identity_page.dart`.
+
+**Nunca derivar la identidad de datos que el servidor conozca.** Antes se usaba `seed = 'themis:voter:<sub>'`: como `themis-core` tiene todos los `sub` en `mock_sso_users`, podía recalcular `commitment` y `nullifier` de cada persona y cruzarlos con el voto, lo que anulaba la firma ciega y rompía la regla 2 del CLAUDE.md raíz. Cualquier cambio en la derivación tiene que mantener la propiedad de que el servidor no pueda reproducir la identidad de un votante.
+
+**Límite conocido:** la frase recupera la *identidad*, no la *credencial* (`preparedMessage`/`signature` no se pueden re-derivar: el factor de cegado es aleatorio y la firma la emitió el servidor). Si el commitment ya entró en un lote `INSERTED`, restaurar alcanza para votar; si la credencial nunca se presentó, el votante queda trabado porque re-registrarse da `409 REGISTRATION_ALREADY_REGISTERED`.
 
 ## Estructura
 

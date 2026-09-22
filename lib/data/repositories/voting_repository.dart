@@ -13,11 +13,13 @@ abstract class VotingRepository {
     required String electionId,
     required String assertion,
   });
+  /// Sin `assertion`: mandarla junto con la opcion votada ponia en la misma
+  /// peticion quien vota y que vota. El backend ya no la acepta; la prueba
+  /// zk-SNARK valida es la unica prueba de habilitacion.
   Future<VoteReceipt> castVote({
     required String electionId,
     required String optionId,
     required ZkVoteProof proof,
-    String? assertion,
   });
 }
 
@@ -63,14 +65,12 @@ class HttpVotingRepository implements VotingRepository {
     required String electionId,
     required String optionId,
     required ZkVoteProof proof,
-    String? assertion,
   }) async {
     final json = await _client.postJson(
       '/elections/$electionId/votes',
       body: {
         'optionId': optionId,
         'proof': proof.toJson(),
-        if (assertion != null && assertion.isNotEmpty) 'assertion': assertion,
       },
     );
     return VoteReceipt.fromJson(json);

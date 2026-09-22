@@ -7,10 +7,12 @@ import 'package:go_router/go_router.dart';
 import '../../core/config/credential_presentation_config.dart';
 import '../../core/crypto/crypto_bridge.dart';
 import '../../core/crypto/crypto_bridge_exception.dart';
+import '../../core/crypto/identity_seed.dart';
 import '../../core/storage/secure_identity_store.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/repositories/registration_repository.dart';
 import '../../domain/entities/ballot_route_args.dart';
+import '../../domain/entities/mnemonic_backup_route_args.dart';
 import 'widgets/registration_steps.dart';
 
 enum _Outcome { working, done, error, notice }
@@ -71,14 +73,12 @@ class RegistrationPage extends StatefulWidget {
     required this.secureIdentityStore,
     required this.electionId,
     required this.assertion,
-    this.sub,
   });
 
   final RegistrationRepository repository;
   final SecureIdentityStore secureIdentityStore;
   final String electionId;
   final String assertion;
-  final String? sub;
 
   @override
   State<RegistrationPage> createState() => _RegistrationPageState();
@@ -91,6 +91,10 @@ class _RegistrationPageState extends State<RegistrationPage> {
   int _stepIndex = 0;
   String? _message;
 
+  /// Frase mnemonica generada en ESTE registro. Si es null, la identidad
+  /// venia de una frase que el votante ya respaldo antes.
+  String? _newMnemonic;
+
   @override
   void initState() {
     super.initState();
@@ -100,10 +104,20 @@ class _RegistrationPageState extends State<RegistrationPage> {
 
   Future<void> _run() async {
     try {
-      final seed = widget.sub != null && widget.sub!.isNotEmpty
-          ? 'themis:voter:${widget.sub}'
-          : null;
-      final identity = await _bridge.generateIdentity(seed: seed);
+      // La identidad se deriva de una frase mnemonica BIP-39 que custodia el
+      // votante, nunca del `sub` del SSO: el backend conoce todos los `sub`,
+      // asi que derivar de ahi le permitiria recalcular el nullifier de cada
+      // persona y asociarlo con su voto (regla 2 del CLAUDE.md raiz).
+      // Ver core/crypto/identity_seed.dart.
+      final existingMnemonic = await widget.secureIdentityStore.readMnemonic();
+      final mnemonic = existingMnemonic ?? generateMnemonic();
+      final identity = await _bridge.generateIdentity(
+        seed: seedFromMnemonic(mnemonic),
+      );
+      await widget.secureIdentityStore.writeMnemonic(mnemonic);
+      if (existingMnemonic == null) {
+        _newMnemonic = mnemonic;
+      }
       if (!mounted) return;
       setState(() => _stepIndex = 1);
       await widget.secureIdentityStore.write(identity.privateKey);
@@ -141,16 +155,13 @@ class _RegistrationPageState extends State<RegistrationPage> {
         presentAt: DateTime.now().toUtc().add(_randomPresentationDelay()),
       );
 
-      // Presentar oportunamente
-      try {
-        await widget.repository.presentCredential(
-          electionId: widget.electionId,
-          preparedMessage: blinded.preparedMessage,
-          signature: signature,
-        );
-        await widget.secureIdentityStore.markPresentationDone();
-      } catch (_) {}
-
+      // La credencial NO se presenta aca: presentarla en el mismo instante
+      // del registro dejaba `registration_requests.created_at` y
+      // `presented_credentials.presented_at` a milisegundos, y ordenando
+      // ambas tablas se podia asociar la persona con su commitment. La
+      // presentacion la hace maybePresentPendingCredential cuando vence el
+      // delay aleatorio (ver core/scheduling/credential_presentation_checker.dart,
+      // ya cableado en main.dart).
       await widget.secureIdentityStore.markElectionRegistered(widget.electionId);
 
       if (!mounted) return;
@@ -325,7 +336,6 @@ class _RegistrationPageState extends State<RegistrationPage> {
                       '/votar',
                       extra: BallotRouteArgs(
                         electionId: widget.electionId,
-                        assertion: widget.assertion,
                       ),
                     ),
                     icon: const Icon(Icons.how_to_vote_rounded),
@@ -354,12 +364,28 @@ class _RegistrationPageState extends State<RegistrationPage> {
                       const Icon(Icons.verified_rounded, color: AppColors.success),
                       const SizedBox(width: AppSpacing.sm),
                       Expanded(
-                        child: Text(
-                          '¡Habilitación completada con éxito!',
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: AppColors.success,
-                            fontWeight: FontWeight.w700,
-                          ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Credencial certificada',
+                              style: theme.textTheme.bodyMedium?.copyWith(
+                                color: AppColors.success,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            // El padron solo crece cuando el checkpoint cierra
+                            // el lote y 3 de 5 autoridades lo aprueban, asi que
+                            // habilitarse no es instantaneo a proposito.
+                            Text(
+                              'Tu habilitación en el padrón se completará en unos minutos, '
+                              'cuando las autoridades aprueben el lote.',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: AppColors.inkMuted,
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -368,23 +394,40 @@ class _RegistrationPageState extends State<RegistrationPage> {
                 const SizedBox(height: AppSpacing.lg),
                 SizedBox(
                   height: 52,
-                  child: FilledButton.icon(
-                    onPressed: () => context.pushReplacement(
-                      '/votar',
-                      extra: BallotRouteArgs(
-                        electionId: widget.electionId,
-                        assertion: widget.assertion,
-                      ),
-                    ),
-                    icon: const Icon(Icons.how_to_vote_rounded),
-                    label: const Text('Ingresar a votar'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: AppColors.ink,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(AppRadius.button),
-                      ),
-                    ),
-                  ),
+                  child: _newMnemonic != null
+                      ? FilledButton.icon(
+                          onPressed: () => context.pushReplacement(
+                            '/identidad/respaldo',
+                            extra: MnemonicBackupRouteArgs(
+                              mnemonic: _newMnemonic!,
+                              electionId: widget.electionId,
+                            ),
+                          ),
+                          icon: const Icon(Icons.key_rounded),
+                          label: const Text('Guardar mi frase de recuperación'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.ink,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(AppRadius.button),
+                            ),
+                          ),
+                        )
+                      : FilledButton.icon(
+                          onPressed: () => context.pushReplacement(
+                            '/votar',
+                            extra: BallotRouteArgs(
+                              electionId: widget.electionId,
+                            ),
+                          ),
+                          icon: const Icon(Icons.how_to_vote_rounded),
+                          label: const Text('Ingresar a votar'),
+                          style: FilledButton.styleFrom(
+                            backgroundColor: AppColors.ink,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(AppRadius.button),
+                            ),
+                          ),
+                        ),
                 ),
               ],
             ],

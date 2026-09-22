@@ -22,4 +22,21 @@ class Env {
   static String get webProverUrl {
     return dotenv.env['WEB_PROVER_URL'] ?? 'http://localhost:5173/prove';
   }
+
+  /// Rango del delay antes de presentar la credencial de forma anonima.
+  /// Configurable para poder acortarlo en una demo, pero con default seguro:
+  /// si la presentacion ocurre junto al registro, los timestamps de
+  /// `registration_requests` y `presented_credentials` quedan a milisegundos y
+  /// permiten asociar la persona con su commitment.
+  static Duration get presentationDelayMin =>
+      Duration(seconds: _intOr('PRESENTATION_DELAY_MIN_SECONDS', 45));
+
+  static Duration get presentationDelayMax =>
+      Duration(seconds: _intOr('PRESENTATION_DELAY_MAX_SECONDS', 180));
+
+  static int _intOr(String key, int fallback) {
+    final raw = dotenv.env[key];
+    if (raw == null || raw.isEmpty) return fallback;
+    return int.tryParse(raw) ?? fallback;
+  }
 }

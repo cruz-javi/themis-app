@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../core/crypto/crypto_bridge.dart';
 import '../../core/storage/secure_identity_store.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/repositories/voting_repository.dart';
@@ -28,7 +27,6 @@ class LoginResultPage extends StatefulWidget {
 }
 
 class _LoginResultPageState extends State<LoginResultPage> {
-  late final CryptoBridge _cryptoBridge;
   bool _loadingElections = false;
   bool _isVoteEnabledLocally = false;
   bool _hasVotedInCurrentElection = false;
@@ -38,10 +36,15 @@ class _LoginResultPageState extends State<LoginResultPage> {
 
   bool _isCheckingStatus = false;
 
+  /// El servidor dice que esta registrado pero el dispositivo no tiene la
+  /// identidad: hay que restaurarla con la frase de 12 palabras. Antes esto se
+  /// resolvia derivando la identidad del `sub`, lo que permitia al servidor
+  /// recalcularla y asociar cada voto con su votante.
+  bool _needsIdentityRestore = false;
+
   @override
   void initState() {
     super.initState();
-    _cryptoBridge = CryptoBridge();
     _fetchActiveElections();
   }
 
@@ -81,7 +84,6 @@ class _LoginResultPageState extends State<LoginResultPage> {
       });
 
       // 2. VERIFICACIÓN EN PADRÓN ELECTORAL (Servidor)
-      bool serverHasVoted = false;
       bool serverIsRegistered = false;
       if (widget.votingRepository != null && widget.result.assertion.isNotEmpty) {
         try {
@@ -89,36 +91,23 @@ class _LoginResultPageState extends State<LoginResultPage> {
             electionId: currentId,
             assertion: widget.result.assertion,
           );
-          serverHasVoted = status.hasVoted;
           serverIsRegistered = status.isRegistered;
           debugPrint(
-            '[voter-status] Servidor ($currentId): isRegistered=${status.isRegistered}, hasVoted=${status.hasVoted}',
+            '[voter-status] Servidor ($currentId): isRegistered=${status.isRegistered}',
           );
         } catch (e) {
           debugPrint('[voter-status] Error al consultar servidor: $e');
         }
       }
 
-      final hasVoted = serverHasVoted || localHasVoted;
+      // `hasVoted` sale solo del recibo local: el servidor ya no lo informa,
+      // porque para hacerlo tenia que guardar quien voto y cuando, y eso
+      // permitia cruzar por hora la persona con su opcion. El doble voto lo
+      // sigue frenando el nullifier on-chain (409 DUPLICATE_VOTE).
+      final hasVoted = localHasVoted;
       final isRegistered = serverIsRegistered || localIsRegistered;
 
-      // Si el servidor confirma que está registrado pero la identidad local se borró
-      // (ej. tras borrar datos de la app o cambio de equipo), se restaura determinísticamente.
       if (isRegistered) {
-        if (identity == null || identity.isEmpty) {
-          try {
-            final sub = widget.result.payload.sub.isNotEmpty
-                ? widget.result.payload.sub
-                : widget.result.codigoInstitucional;
-            if (sub != null && sub.isNotEmpty) {
-              final derived = await _cryptoBridge.generateIdentity(
-                seed: 'themis:voter:$sub',
-              );
-              await widget.secureIdentityStore!.write(derived.privateKey);
-              identity = derived.privateKey;
-            }
-          } catch (_) {}
-        }
         await widget.secureIdentityStore!.markElectionRegistered(currentId);
       }
 
@@ -128,6 +117,9 @@ class _LoginResultPageState extends State<LoginResultPage> {
       setState(() {
         _hasVotedInCurrentElection = hasVoted;
         _isVoteEnabledLocally = hasSecret && isRegistered && !hasVoted;
+        // Registrado en el padron pero sin identidad en este dispositivo:
+        // solo la frase de recuperacion puede devolverla.
+        _needsIdentityRestore = isRegistered && !hasSecret && !hasVoted;
         _currentElectionVoteReceipt = localReceipt;
         _isCheckingStatus = false;
       });
@@ -690,7 +682,6 @@ class _LoginResultPageState extends State<LoginResultPage> {
                             '/votar',
                             extra: BallotRouteArgs(
                               electionId: _currentElectionId!,
-                              assertion: widget.result.assertion,
                             ),
                           );
                           await _checkLocalIdentity();
@@ -724,6 +715,51 @@ class _LoginResultPageState extends State<LoginResultPage> {
                   ),
                 ),
               ),
+            ] else if (_needsIdentityRestore) ...[
+              // Registrado en el padrón, pero este dispositivo no tiene la
+              // identidad. Solo la frase de 12 palabras puede devolverla: el
+              // servidor no la conoce, y que no la conozca es justamente lo
+              // que impide asociar un voto con su votante.
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(AppSpacing.cardPadding),
+                decoration: BoxDecoration(
+                  color: AppColors.accentLight,
+                  borderRadius: BorderRadius.circular(AppRadius.card),
+                  border:
+                      Border.all(color: AppColors.accent.withValues(alpha: 0.3)),
+                ),
+                child: Text(
+                  'Ya estás habilitado en el padrón, pero este dispositivo no '
+                  'tiene tu identidad de voto. Restaurala con las 12 palabras '
+                  'que anotaste al registrarte.',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: AppColors.ink),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _isCheckingStatus
+                      ? null
+                      : () async {
+                          await context.push('/identidad/restaurar');
+                          await _checkLocalIdentity();
+                        },
+                  icon: const Icon(Icons.key_rounded, size: 20),
+                  label: const Text('Restaurar con mis 12 palabras'),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(50),
+                    backgroundColor: AppColors.ink,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppRadius.button),
+                    ),
+                  ),
+                ),
+              ),
             ] else ...[
               // Aún no está habilitado: Sale ÚNICAMENTE habilitar mi voto
               SizedBox(
@@ -736,9 +772,6 @@ class _LoginResultPageState extends State<LoginResultPage> {
                             extra: RegistrationRouteArgs(
                               electionId: _currentElectionId!,
                               assertion: widget.result.assertion,
-                              sub: widget.result.payload.sub.isNotEmpty
-                                  ? widget.result.payload.sub
-                                  : widget.result.codigoInstitucional,
                             ),
                           );
                           await _checkLocalIdentity();

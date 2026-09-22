@@ -9,6 +9,8 @@ class SecureIdentityStore {
       : _storage = storage ?? const FlutterSecureStorage();
 
   static const _identityKey = 'themis.identity.secret';
+  static const _mnemonicKey = 'themis.identity.mnemonic';
+  static const _mnemonicBackedUpKey = 'themis.identity.mnemonic_backed_up';
   static const _credentialPreparedMessageKey = 'themis.credential.prepared_message';
   static const _credentialSignatureKey = 'themis.credential.signature';
   static const _presentationElectionIdKey = 'themis.presentation.election_id';
@@ -21,6 +23,24 @@ class SecureIdentityStore {
 
   Future<void> write(String secret) =>
       _storage.write(key: _identityKey, value: secret);
+
+  /// La frase mnemonica BIP-39 desde la que se deriva la identidad Semaphore
+  /// (ver core/crypto/identity_seed.dart). Se guarda para poder mostrarsela al
+  /// votante mas de una vez hasta que confirme que la anoto; el respaldo real
+  /// es el papel, no este storage - si el dispositivo se pierde, esto se
+  /// pierde con el.
+  Future<void> writeMnemonic(String mnemonic) =>
+      _storage.write(key: _mnemonicKey, value: mnemonic);
+
+  Future<String?> readMnemonic() => _storage.read(key: _mnemonicKey);
+
+  /// El votante confirmo que anoto la frase fuera del dispositivo.
+  Future<bool> isMnemonicBackedUp() async {
+    return (await _storage.read(key: _mnemonicBackedUpKey)) == 'true';
+  }
+
+  Future<void> markMnemonicBackedUp() =>
+      _storage.write(key: _mnemonicBackedUpKey, value: 'true');
 
   /// La "credencial certificada" (ver diagrama de secuencia): el mensaje
   /// preparado que realmente se firmo, mas la firma ya descegada. Ambos
