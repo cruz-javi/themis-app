@@ -26,6 +26,8 @@ flutter run
 
 **Nunca derivar la identidad de datos que el servidor conozca.** Antes se usaba `seed = 'themis:voter:<sub>'`: como `themis-core` tiene todos los `sub` en `mock_sso_users`, podía recalcular `commitment` y `nullifier` de cada persona y cruzarlos con el voto, lo que anulaba la firma ciega y rompía la regla 2 del CLAUDE.md raíz. Cualquier cambio en la derivación tiene que mantener la propiedad de que el servidor no pueda reproducir la identidad de un votante.
 
+**Un dispositivo guarda la identidad de un solo votante a la vez.** `SecureIdentityStore` marca de quién es la identidad guardada con `accountTag` (hash local del `sub`, `accountTagFromSub`). Si inicia sesión otra cuenta y se registra, los datos del votante anterior se borran y se genera una identidad nueva: reusar la frase daría el mismo commitment, y aunque el registro pasaría (su `scoped_token_hash` es distinto), la credencial choca con `409 CREDENTIAL_ALREADY_PRESENTED` y esa cuenta nunca entraría al padrón. El `accountTag` **solo indexa el storage**, nunca interviene en derivar la identidad — si se usara como seed volvería la vulnerabilidad de arriba. Para volver a la cuenta anterior hay que restaurarla con sus 12 palabras.
+
 **Límite conocido:** la frase recupera la *identidad*, no la *credencial* (`preparedMessage`/`signature` no se pueden re-derivar: el factor de cegado es aleatorio y la firma la emitió el servidor). Si el commitment ya entró en un lote `INSERTED`, restaurar alcanza para votar; si la credencial nunca se presentó, el votante queda trabado porque re-registrarse da `409 REGISTRATION_ALREADY_REGISTERED`.
 
 ## Estructura

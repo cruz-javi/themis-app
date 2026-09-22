@@ -39,6 +39,19 @@ bool isValidMnemonic(String mnemonic) {
 String normalizeMnemonic(String mnemonic) =>
     mnemonic.trim().toLowerCase().split(RegExp(r'\s+')).join(' ');
 
+/// Etiqueta local de la cuenta que es dueña de la identidad guardada.
+///
+/// **No interviene en la derivacion de la identidad**: solo permite detectar
+/// que el dispositivo cambio de votante (otra persona inicio sesion) para no
+/// reusar la identidad de la cuenta anterior. La mnemonica sigue siendo
+/// aleatoria, asi que el servidor no puede reproducirla aunque conozca el
+/// `sub`; si esta etiqueta se usara como seed volveria la vulnerabilidad que
+/// describe el comentario de arriba.
+String accountTagFromSub(String sub) {
+  final digest = sha256.convert(utf8.encode('themis:account:$sub'));
+  return digest.toString().substring(0, 16);
+}
+
 /// Clave privada Semaphore (hex) derivada de la frase. Determinista respecto
 /// de la frase y de nada mas: la misma frase da siempre la misma identidad, y
 /// dos frases distintas dan identidades sin relacion entre si.

@@ -73,12 +73,17 @@ class RegistrationPage extends StatefulWidget {
     required this.secureIdentityStore,
     required this.electionId,
     required this.assertion,
+    required this.accountTag,
   });
 
   final RegistrationRepository repository;
   final SecureIdentityStore secureIdentityStore;
   final String electionId;
   final String assertion;
+
+  /// Ver RegistrationRouteArgs.accountTag: solo identifica de quien es la
+  /// identidad guardada, nunca interviene en derivarla.
+  final String accountTag;
 
   @override
   State<RegistrationPage> createState() => _RegistrationPageState();
@@ -109,6 +114,17 @@ class _RegistrationPageState extends State<RegistrationPage> {
       // asi que derivar de ahi le permitiria recalcular el nullifier de cada
       // persona y asociarlo con su voto (regla 2 del CLAUDE.md raiz).
       // Ver core/crypto/identity_seed.dart.
+      // Un celular guarda la identidad de un solo votante a la vez. Si inicio
+      // sesion otra cuenta, los datos del votante anterior no le sirven y
+      // reusar su frase daria el mismo commitment: el registro pasaria (su
+      // scoped_token_hash es distinto) pero la credencial choca con
+      // 409 CREDENTIAL_ALREADY_PRESENTED y nunca entraria al padron.
+      final savedTag = await widget.secureIdentityStore.readAccountTag();
+      if (savedTag != null && savedTag != widget.accountTag) {
+        await widget.secureIdentityStore.clear();
+      }
+      await widget.secureIdentityStore.writeAccountTag(widget.accountTag);
+
       final existingMnemonic = await widget.secureIdentityStore.readMnemonic();
       final mnemonic = existingMnemonic ?? generateMnemonic();
       final identity = await _bridge.generateIdentity(

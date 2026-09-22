@@ -61,6 +61,7 @@ GoRouter buildRouter(
             secureIdentityStore: secureIdentityStore,
             electionId: args.electionId,
             assertion: args.assertion,
+            accountTag: args.accountTag,
           );
         },
       ),

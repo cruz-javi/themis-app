@@ -20,6 +20,27 @@ void main() {
     });
   });
 
+  group('accountTagFromSub', () {
+    test('es estable para el mismo sub y distinto entre cuentas', () {
+      expect(accountTagFromSub('user-a'), accountTagFromSub('user-a'));
+      expect(accountTagFromSub('user-a'), isNot(accountTagFromSub('user-b')));
+    });
+
+    // La etiqueta solo indexa el storage: si se usara como seed volveria la
+    // vulnerabilidad de derivar la identidad de un dato que el servidor conoce.
+    test('no sirve para derivar la identidad', () {
+      const sub = 'user-a';
+      final tag = accountTagFromSub(sub);
+      final mnemonicA = generateMnemonic();
+      final mnemonicB = generateMnemonic();
+
+      // Dos registros de la misma cuenta con frases distintas dan identidades
+      // distintas: la cuenta no determina la identidad.
+      expect(seedFromMnemonic(mnemonicA), isNot(seedFromMnemonic(mnemonicB)));
+      expect(seedFromMnemonic(mnemonicA), isNot(contains(tag)));
+    });
+  });
+
   group('seedFromMnemonic', () {
     test('la misma frase da siempre el mismo seed (permite recuperar)', () {
       final mnemonic = generateMnemonic();

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/crypto/identity_seed.dart';
 import '../../core/storage/secure_identity_store.dart';
 import '../../core/theme/app_theme.dart';
 import '../../data/repositories/voting_repository.dart';
@@ -42,6 +43,11 @@ class _LoginResultPageState extends State<LoginResultPage> {
   /// recalcularla y asociar cada voto con su votante.
   bool _needsIdentityRestore = false;
 
+  /// Etiqueta de la cuenta logueada. Si el dispositivo tiene guardada la
+  /// identidad de otra cuenta, su estado local (recibo de voto, marca de
+  /// registro) no aplica a esta sesion.
+  String get _accountTag => accountTagFromSub(widget.result.payload.sub);
+
   @override
   void initState() {
     super.initState();
@@ -64,13 +70,20 @@ class _LoginResultPageState extends State<LoginResultPage> {
         return;
       }
 
+      // El dispositivo guarda la identidad de un solo votante a la vez. Si lo
+      // guardado es de otra cuenta, su recibo y su marca de registro no aplican
+      // a esta sesion: mostrarlos diria "ya votaste" a alguien que no voto.
+      final savedTag = await widget.secureIdentityStore!.readAccountTag();
+      final sameAccount = savedTag == null || savedTag == _accountTag;
+
       // 1. VERIFICACIÓN LOCAL INMEDIATA (0 ms)
       // Si el elector ya votó en este dispositivo, actualizamos al instante
       // sin esperar la respuesta de la red para evitar parpadeos o doble clic.
-      String? identity = await widget.secureIdentityStore!.read();
-      final localReceipt = await widget.secureIdentityStore!.getVoteReceipt(currentId);
+      String? identity = sameAccount ? await widget.secureIdentityStore!.read() : null;
+      final localReceipt =
+          sameAccount ? await widget.secureIdentityStore!.getVoteReceipt(currentId) : null;
       final localHasVoted = localReceipt != null;
-      final localIsRegistered =
+      final localIsRegistered = sameAccount &&
           await widget.secureIdentityStore!.isElectionRegistered(currentId);
 
       if (!mounted) return;
@@ -119,7 +132,7 @@ class _LoginResultPageState extends State<LoginResultPage> {
         _isVoteEnabledLocally = hasSecret && isRegistered && !hasVoted;
         // Registrado en el padron pero sin identidad en este dispositivo:
         // solo la frase de recuperacion puede devolverla.
-        _needsIdentityRestore = isRegistered && !hasSecret && !hasVoted;
+        _needsIdentityRestore = isRegistered && !hasSecret && !hasVoted && sameAccount;
         _currentElectionVoteReceipt = localReceipt;
         _isCheckingStatus = false;
       });
@@ -772,6 +785,7 @@ class _LoginResultPageState extends State<LoginResultPage> {
                             extra: RegistrationRouteArgs(
                               electionId: _currentElectionId!,
                               assertion: widget.result.assertion,
+                              accountTag: _accountTag,
                             ),
                           );
                           await _checkLocalIdentity();

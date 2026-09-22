@@ -9,6 +9,7 @@ class SecureIdentityStore {
       : _storage = storage ?? const FlutterSecureStorage();
 
   static const _identityKey = 'themis.identity.secret';
+  static const _accountTagKey = 'themis.identity.account_tag';
   static const _mnemonicKey = 'themis.identity.mnemonic';
   static const _mnemonicBackedUpKey = 'themis.identity.mnemonic_backed_up';
   static const _credentialPreparedMessageKey = 'themis.credential.prepared_message';
@@ -23,6 +24,15 @@ class SecureIdentityStore {
 
   Future<void> write(String secret) =>
       _storage.write(key: _identityKey, value: secret);
+
+  /// Etiqueta de la cuenta dueña de la identidad guardada (ver
+  /// core/crypto/identity_seed.dart). Sirve para detectar que el dispositivo
+  /// cambio de votante: un celular guarda la identidad de un solo votante a la
+  /// vez, y volver a la anterior exige restaurarla con su frase.
+  Future<String?> readAccountTag() => _storage.read(key: _accountTagKey);
+
+  Future<void> writeAccountTag(String tag) =>
+      _storage.write(key: _accountTagKey, value: tag);
 
   /// La frase mnemonica BIP-39 desde la que se deriva la identidad Semaphore
   /// (ver core/crypto/identity_seed.dart). Se guarda para poder mostrarsela al
