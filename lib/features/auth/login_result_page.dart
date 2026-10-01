@@ -147,7 +147,14 @@ class _LoginResultPageState extends State<LoginResultPage> {
     if (widget.votingRepository == null) return;
     setState(() => _loadingElections = true);
     try {
-      final list = await widget.votingRepository!.fetchActiveElections();
+      // Esta pantalla cubre tanto "regístrate" (REGISTRO_ABIERTO) como
+      // "vota" (VOTACION_ABIERTA), asi que necesita ambas listas: el
+      // endpoint /active del repo solo trae la segunda.
+      final results = await Future.wait([
+        widget.votingRepository!.fetchActiveElections(),
+        widget.votingRepository!.fetchRegistrableElections(),
+      ]);
+      final list = [...results[0], ...results[1]];
       if (!mounted) return;
       setState(() {
         _activeElections = list;

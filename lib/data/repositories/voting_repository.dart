@@ -7,6 +7,10 @@ import '../../domain/entities/zk_vote_proof.dart';
 
 abstract class VotingRepository {
   Future<List<BallotElection>> fetchActiveElections();
+  /// Elecciones en REGISTRO_ABIERTO: /elections/public/active solo trae
+  /// VOTACION_ABIERTA, asi que el flujo de registro (CU-05) necesita este
+  /// fetch aparte o nunca ve una eleccion mientras esta abierto su registro.
+  Future<List<BallotElection>> fetchRegistrableElections();
   Future<BallotElection> fetchElectionDetails(String electionId);
   Future<MerkleTreeData> fetchMerkleTree(String electionId);
   Future<VoterStatus> fetchVoterStatus({
@@ -31,6 +35,15 @@ class HttpVotingRepository implements VotingRepository {
   @override
   Future<List<BallotElection>> fetchActiveElections() async {
     final list = await _client.getJsonList('/elections/public/active');
+    return list
+        .map((e) => BallotElection.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<List<BallotElection>> fetchRegistrableElections() async {
+    final list =
+        await _client.getJsonList('/elections/public?estado=REGISTRO_ABIERTO');
     return list
         .map((e) => BallotElection.fromJson(e as Map<String, dynamic>))
         .toList();

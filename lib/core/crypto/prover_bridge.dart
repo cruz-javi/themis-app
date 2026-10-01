@@ -8,6 +8,20 @@ import '../../domain/entities/zk_vote_proof.dart';
 import '../config/env.dart';
 import 'crypto_bridge_exception.dart';
 
+/// Traduce el error de Semaphore cuando la identidad no esta en el arbol
+/// ("The leaf at index '-1' does not exist in this tree"). Lo tipico es que
+/// el votante se registro al final de la ventana y su lote todavia espera la
+/// aprobacion 3-de-5 o la insercion on-chain, aunque la votacion ya abrio.
+// ponytail: match por texto del mensaje de @zk-kit; si cambia la libreria,
+// vuelve a verse el mensaje crudo (no rompe nada, solo es menos claro).
+String friendlyProofError(String raw) {
+  if (raw.contains('does not exist in this tree')) {
+    return 'Tu credencial todavía no está en el padrón de esta elección. '
+        'Si te registraste hace poco, se está procesando: intenta de nuevo en unos minutos.';
+  }
+  return raw;
+}
+
 /// WebView bridge que conecta con la ruta `/prove` de Themis Web
 /// para generar pruebas ZK-SNARK (Groth16 Semaphore) de forma aislada
 /// en el dispositivo del votante (CU-10).
@@ -124,7 +138,7 @@ class ProverBridge {
     );
     if (result['ok'] != true) {
       throw CryptoBridgeException(
-        result['error'] as String? ?? 'Error generando la prueba ZK',
+        friendlyProofError(result['error'] as String? ?? 'Error generando la prueba ZK'),
       );
     }
 
